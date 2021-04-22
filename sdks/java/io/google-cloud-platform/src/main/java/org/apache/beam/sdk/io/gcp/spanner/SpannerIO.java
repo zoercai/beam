@@ -1377,9 +1377,8 @@ public class SpannerIO {
           getInclusiveStartAt() != null,
           "SpannerIO.readChangeStream() requires the start time to be set.");
 
-      SpannerOptions options = SpannerOptions.newBuilder().build();
-      Spanner spanner = options.getService();
-      DatabaseAdminClient dbAdminClient = spanner.getDatabaseAdminClient();
+      SpannerAccessor spannerAccessor = SpannerAccessor.getOrCreate(getSpannerConfig());
+      DatabaseAdminClient dbAdminClient = spannerAccessor.getDatabaseAdminClient();
 
       PipelineInitializer pipelineInitializer = new PipelineInitializer();
       pipelineInitializer.initialize(
