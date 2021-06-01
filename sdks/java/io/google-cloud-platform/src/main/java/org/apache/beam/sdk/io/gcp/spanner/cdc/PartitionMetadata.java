@@ -175,7 +175,7 @@ public class PartitionMetadata {
     this.updatedAt = updatedAt;
   }
 
-  public Mutation toMutation(String table) {
+  public Mutation toInsertMutation(String table) {
     return Mutation.newInsertBuilder(table)
         .set(COLUMN_PARTITION_TOKEN)
         .to(getPartitionToken())

@@ -103,6 +103,6 @@ public class PipelineInitializer {
         .setHeartbeatSeconds(DEFAULT_HEARTBEAT_SECONDS)
         .setState(State.CREATED)
         .build();
-    databaseClient.write(ImmutableList.of(parentPartition.toMutation(id.getName())));
+    databaseClient.write(ImmutableList.of(parentPartition.toInsertMutation(id.getName())));
   }
 }
