@@ -26,11 +26,11 @@
 package schema
 
 import (
+	"bytes"
 	"fmt"
+	"hash/fnv"
 	"reflect"
-	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"github.com/apache/beam/sdks/go/pkg/beam/core/graph/coder"
 	"github.com/apache/beam/sdks/go/pkg/beam/core/sdf"
@@ -38,6 +38,7 @@ import (
 	"github.com/apache/beam/sdks/go/pkg/beam/internal/errors"
 	pipepb "github.com/apache/beam/sdks/go/pkg/beam/model/pipeline_v1"
 	"github.com/golang/protobuf/proto"
+	"github.com/google/uuid"
 )
 
 // Initialize registered schemas. For use by the beam package at beam.Init time.
@@ -73,13 +74,19 @@ func RegisterType(ut reflect.Type) {
 	defaultRegistry.RegisterType(ut)
 }
 
-var lastShortID int64
-
-// TODO(BEAM-9615): Replace with UUIDs.
-func (r *Registry) getNextID() string {
-	id := atomic.AddInt64(&r.lastShortID, 1)
-	// No reason not to use the smallest string short ids possible.
-	return strconv.FormatInt(id, 36)
+// getUUID generates a UUID using the string form of the type name.
+func getUUID(ut reflect.Type) string {
+	// String produces non-empty output for pointer and slice types.
+	typename := ut.String()
+	hasher := fnv.New128a()
+	if n, err := hasher.Write([]byte(typename)); err != nil || n != len(typename) {
+		panic(fmt.Sprintf("unable to generate schema uuid for %s, wrote out %d bytes, want %d: err %v", typename, n, len(typename), err))
+	}
+	id, err := uuid.NewRandomFromReader(bytes.NewBuffer(hasher.Sum(nil)))
+	if err != nil {
+		panic(fmt.Sprintf("unable to genereate schema uuid for type %s: %v", typename, err))
+	}
+	return id.String()
 }
 
 // Registered returns whether the given type has been registered with
@@ -356,7 +363,7 @@ func (r *Registry) fromType(ot reflect.Type) (*pipepb.Schema, error) {
 		if lID != "" {
 			schm.Options = append(schm.Options, logicalOption(lID))
 		}
-		schm.Id = r.getNextID()
+		schm.Id = getUUID(ot)
 		r.typeToSchema[ot] = schm
 		r.idToType[schm.GetId()] = ot
 		return schm, nil
@@ -371,7 +378,7 @@ func (r *Registry) fromType(ot reflect.Type) (*pipepb.Schema, error) {
 	// Cache the pointer type here with it's own id.
 	pt := reflect.PtrTo(t)
 	schm = proto.Clone(schm).(*pipepb.Schema)
-	schm.Id = r.getNextID()
+	schm.Id = getUUID(pt)
 	schm.Options = append(schm.Options, &pipepb.Option{
 		Name: optGoNillable,
 	})
@@ -460,7 +467,7 @@ func (r *Registry) structToSchema(t reflect.Type) (*pipepb.Schema, error) {
 		schm := ftype.GetRowType().GetSchema()
 		schm = proto.Clone(schm).(*pipepb.Schema)
 		schm.Options = append(schm.Options, logicalOption(lID))
-		schm.Id = r.getNextID()
+		schm.Id = getUUID(t)
 		r.typeToSchema[t] = schm
 		r.idToType[schm.GetId()] = t
 		return schm, nil
@@ -489,7 +496,7 @@ func (r *Registry) structToSchema(t reflect.Type) (*pipepb.Schema, error) {
 
 	schm := &pipepb.Schema{
 		Fields: fields,
-		Id:     r.getNextID(),
+		Id:     getUUID(t),
 	}
 	r.idToType[schm.GetId()] = t
 	r.typeToSchema[t] = schm

@@ -17,8 +17,6 @@
  */
 package org.apache.beam.runners.spark;
 
-import static org.apache.beam.runners.core.construction.resources.PipelineResources.detectClassPathResourcesToStage;
-import static org.apache.beam.runners.spark.SparkCommonPipelineOptions.isLocalSparkMaster;
 import static org.apache.beam.runners.spark.SparkCommonPipelineOptions.prepareFilesToStage;
 import static org.apache.beam.runners.spark.util.SparkCommon.startEventLoggingListener;
 
@@ -134,21 +132,7 @@ public final class SparkRunner extends PipelineRunner<SparkPipelineResult> {
    * @return A pipeline runner that will execute with specified options.
    */
   public static SparkRunner fromOptions(PipelineOptions options) {
-    SparkPipelineOptions sparkOptions =
-        PipelineOptionsValidator.validate(SparkPipelineOptions.class, options);
-
-    if (sparkOptions.getFilesToStage() == null && !isLocalSparkMaster(sparkOptions)) {
-      sparkOptions.setFilesToStage(
-          detectClassPathResourcesToStage(SparkRunner.class.getClassLoader(), options));
-      LOG.info(
-          "PipelineOptions.filesToStage was not specified. "
-              + "Defaulting to files from the classpath: will stage {} files. "
-              + "Enable logging at DEBUG level to see which files will be staged.",
-          sparkOptions.getFilesToStage().size());
-      LOG.debug("Classpath elements: {}", sparkOptions.getFilesToStage());
-    }
-
-    return new SparkRunner(sparkOptions);
+    return new SparkRunner(PipelineOptionsValidator.validate(SparkPipelineOptions.class, options));
   }
 
   /**
@@ -175,13 +159,10 @@ public final class SparkRunner extends PipelineRunner<SparkPipelineResult> {
     // visit the pipeline to determine the translation mode
     detectTranslationMode(pipeline);
 
-    // Default to using the primitive versions of Read.Bounded and Read.Unbounded if we are
-    // executing an unbounded pipeline or the user specifically requested it.
-    if (pipelineOptions.isStreaming()
-        || ExperimentalOptions.hasExperiment(
-            pipeline.getOptions(), "beam_fn_api_use_deprecated_read")
-        || ExperimentalOptions.hasExperiment(pipeline.getOptions(), "use_deprecated_read")) {
-      SplittableParDo.convertReadBasedSplittableDoFnsToPrimitiveReads(pipeline);
+    // Default to using the primitive versions of Read.Bounded and Read.Unbounded.
+    // TODO(BEAM-10670): Use SDF read as default when we address performance issue.
+    if (!ExperimentalOptions.hasExperiment(pipeline.getOptions(), "beam_fn_api")) {
+      SplittableParDo.convertReadBasedSplittableDoFnsToPrimitiveReadsIfNecessary(pipeline);
     }
 
     pipeline.replaceAll(SparkTransformOverrides.getDefaultOverrides(pipelineOptions.isStreaming()));

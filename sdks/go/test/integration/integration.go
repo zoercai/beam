@@ -51,12 +51,7 @@ import (
 
 // sickbay filters tests that fail due to Go SDK errors. These tests will not
 // execute on any runners.
-var sickbay = []string{
-	// TODO(BEAM-11418): These tests are currently failing with the Go SDK.
-	"TestXLang_CoGroupBy",
-	"TestXLang_Multi",
-	"TestXLang_Partition",
-}
+var sickbay = []string{}
 
 // Runner-specific test filters, for features that are not yet supported on
 // specific runners.

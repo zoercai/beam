@@ -46,8 +46,8 @@ import org.apache.beam.sdk.transforms.Impulse;
 import org.apache.beam.sdk.transforms.WithKeys;
 import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.Row;
-import org.apache.beam.vendor.grpc.v1p26p0.com.google.protobuf.ByteString;
-import org.apache.beam.vendor.grpc.v1p26p0.io.grpc.stub.StreamObserver;
+import org.apache.beam.vendor.grpc.v1p36p0.com.google.protobuf.ByteString;
+import org.apache.beam.vendor.grpc.v1p36p0.io.grpc.stub.StreamObserver;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableMap;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Iterables;
@@ -128,8 +128,10 @@ public class KafkaIOExternalTest {
     assertThat(transform.getInputsCount(), Matchers.is(0));
     assertThat(transform.getOutputsCount(), Matchers.is(1));
 
-    RunnerApi.PTransform kafkaComposite =
+    RunnerApi.PTransform kafkaReadComposite =
         result.getComponents().getTransformsOrThrow(transform.getSubtransforms(0));
+    RunnerApi.PTransform kafkaComposite =
+        result.getComponents().getTransformsOrThrow(kafkaReadComposite.getSubtransforms(0));
     assertThat(
         kafkaComposite.getSubtransformsList(),
         Matchers.hasItem(MatchesPattern.matchesPattern(".*Impulse.*")));

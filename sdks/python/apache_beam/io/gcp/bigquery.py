@@ -1754,7 +1754,8 @@ bigquery_v2_messages.TableSchema`. or a `ValueProvider` that has a JSON string,
 
   def display_data(self):
     res = {}
-    if self.table_reference is not None:
+    if self.table_reference is not None and isinstance(self.table_reference,
+                                                       TableReference):
       tableSpec = '{}.{}'.format(
           self.table_reference.datasetId, self.table_reference.tableId)
       if self.table_reference.projectId is not None:
@@ -2083,5 +2084,5 @@ class ReadAllFromBigQuery(PTransform):
 
     return (
         sources_to_read
-        | SDFBoundedSourceReader()
+        | SDFBoundedSourceReader(data_to_display=self.display_data())
         | _PassThroughThenCleanup(beam.pvalue.AsIter(cleanup_locations)))

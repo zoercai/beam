@@ -33,6 +33,7 @@ import io
 import json
 import logging
 import re
+import sys
 import time
 import uuid
 from json.decoder import JSONDecodeError
@@ -72,13 +73,12 @@ except ImportError:
   pass
 # pylint: enable=wrong-import-order, wrong-import-position
 
-# pylint: disable=wrong-import-order, wrong-import-position
+# pylint: disable=wrong-import-order, wrong-import-position, ungrouped-imports
 try:
   from apache_beam.io.gcp.internal.clients.bigquery import TableReference
 except ImportError:
   TableReference = None
-
-# pylint: enable=wrong-import-order, wrong-import-position
+# pylint: enable=wrong-import-order, wrong-import-position, ungrouped-imports
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -642,6 +642,9 @@ class BigQueryWrapper(object):
           service_call_metric.call(error.reason)
     except HttpError as e:
       service_call_metric.call(e)
+
+      # Re-reise the exception so that we re-try appropriately.
+      raise
     finally:
       self._latency_histogram_metric.update(
           int(time.time() * 1000) - started_millis)
@@ -1503,9 +1506,10 @@ class AvroRowWriter(io.IOBase):
     try:
       self._avro_writer.write(row)
     except (TypeError, ValueError) as ex:
+      _, _, tb = sys.exc_info()
       raise ex.__class__(
           "Error writing row to Avro: {}\nSchema: {}\nRow: {}".format(
-              ex, self._avro_writer.schema, row)).with_traceback()
+              ex, self._avro_writer.schema, row)).with_traceback(tb)
 
 
 class RetryStrategy(object):
