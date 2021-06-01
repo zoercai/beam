@@ -60,7 +60,8 @@ public abstract class SpannerConfig implements Serializable {
   @VisibleForTesting
   abstract @Nullable ServiceFactory<Spanner, SpannerOptions> getServiceFactory();
 
-  abstract Builder toBuilder();
+  @VisibleForTesting
+  public abstract Builder toBuilder();
 
   public static SpannerConfig create() {
     return builder()
@@ -101,7 +102,7 @@ public abstract class SpannerConfig implements Serializable {
   @AutoValue.Builder
   public abstract static class Builder {
 
-    abstract Builder setProjectId(ValueProvider<String> projectId);
+    public abstract Builder setProjectId(ValueProvider<String> projectId);
 
     abstract Builder setInstanceId(ValueProvider<String> instanceId);
 
