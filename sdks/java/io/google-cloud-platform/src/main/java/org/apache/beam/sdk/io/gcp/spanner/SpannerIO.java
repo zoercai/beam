@@ -1380,7 +1380,8 @@ public class SpannerIO {
           "SpannerIO.readChangeStream() requires the start time to be set.");
 
       // Start time must be before end time
-      if (getExclusiveEndAt() != null && getInclusiveStartAt().compareTo(getExclusiveEndAt()) > 0) {
+      if (getExclusiveEndAt() != null && getInclusiveStartAt().toSqlTimestamp()
+          .after(getExclusiveEndAt().toSqlTimestamp())) {
         throw new IllegalArgumentException("Start time cannot be after end time.");
       }
 
