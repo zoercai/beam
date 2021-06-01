@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
 import com.google.cloud.Timestamp;
+import com.google.common.collect.ImmutableList;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.State;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -37,7 +38,7 @@ public class PartitionMetadataTest {
     PartitionMetadata expectedPartitionMetadata =
         new PartitionMetadata(
             A_PARTITION_TOKEN,
-            A_PARTITION_TOKEN,
+            ImmutableList.of(A_PARTITION_TOKEN),
             A_TIMESTAMP,
             true,
             A_TIMESTAMP,
@@ -49,7 +50,7 @@ public class PartitionMetadataTest {
     PartitionMetadata actualPartitionMetadata =
         PartitionMetadata.newBuilder()
             .setPartitionToken(A_PARTITION_TOKEN)
-            .setParentToken(A_PARTITION_TOKEN)
+            .setParentTokens(ImmutableList.of(A_PARTITION_TOKEN))
             .setStartTimestamp(A_TIMESTAMP)
             .setEndTimestamp(A_TIMESTAMP)
             .setHeartbeatSeconds(10)
@@ -67,7 +68,7 @@ public class PartitionMetadataTest {
         IllegalStateException.class,
         () ->
             PartitionMetadata.newBuilder()
-                .setParentToken(A_PARTITION_TOKEN)
+                .setParentTokens(ImmutableList.of(A_PARTITION_TOKEN))
                 .setStartTimestamp(A_TIMESTAMP)
                 .setEndTimestamp(A_TIMESTAMP)
                 .setHeartbeatSeconds(10)
@@ -102,7 +103,7 @@ public class PartitionMetadataTest {
         () ->
             PartitionMetadata.newBuilder()
                 .setPartitionToken(A_PARTITION_TOKEN)
-                .setParentToken(A_PARTITION_TOKEN)
+                .setParentTokens(ImmutableList.of(A_PARTITION_TOKEN))
                 .setEndTimestamp(A_TIMESTAMP)
                 .setHeartbeatSeconds(10)
                 .setState(State.CREATED)
@@ -119,7 +120,7 @@ public class PartitionMetadataTest {
         () ->
             PartitionMetadata.newBuilder()
                 .setPartitionToken(A_PARTITION_TOKEN)
-                .setParentToken(A_PARTITION_TOKEN)
+                .setParentTokens(ImmutableList.of(A_PARTITION_TOKEN))
                 .setStartTimestamp(A_TIMESTAMP)
                 .setEndTimestamp(A_TIMESTAMP)
                 .setState(State.CREATED)
@@ -136,7 +137,7 @@ public class PartitionMetadataTest {
         () ->
             PartitionMetadata.newBuilder()
                 .setPartitionToken(A_PARTITION_TOKEN)
-                .setParentToken(A_PARTITION_TOKEN)
+                .setParentTokens(ImmutableList.of(A_PARTITION_TOKEN))
                 .setStartTimestamp(A_TIMESTAMP)
                 .setEndTimestamp(A_TIMESTAMP)
                 .setHeartbeatSeconds(10)

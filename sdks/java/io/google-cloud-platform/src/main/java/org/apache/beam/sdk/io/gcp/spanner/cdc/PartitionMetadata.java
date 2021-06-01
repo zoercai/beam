@@ -18,10 +18,14 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
 import com.google.cloud.Timestamp;
+import com.google.cloud.spanner.Mutation;
+import java.util.List;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Objects;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions;
 
-/** Model for the partition metadata database table used in the Connector. */
+/**
+ * Model for the partition metadata database table used in the Connector.
+ */
 public class PartitionMetadata {
 
   public enum State {
@@ -33,11 +37,23 @@ public class PartitionMetadata {
     FINISHED
   }
 
+  // Metadata table column names
+  static final String COLUMN_PARTITION_TOKEN = "PartitionToken";
+  static final String COLUMN_PARENT_TOKEN = "ParentToken";
+  static final String COLUMN_START_TIMESTAMP = "StartTimestamp";
+  static final String COLUMN_INCLUSIVE_START = "InclusiveStart";
+  static final String COLUMN_END_TIMESTAMP = "EndTimestamp";
+  static final String COLUMN_INCLUSIVE_END = "InclusiveEnd";
+  static final String COLUMN_HEARTBEAT_SECONDS = "HeartbeatSeconds";
+  static final String COLUMN_STATE = "State";
+  static final String COLUMN_CREATED_AT = "CreatedAt";
+  static final String COLUMN_UPDATED_AT = "UpdatedAt";
+
   // Unique partition token, obtained from the Child Partition record from the Change Streams API
   // call.
   private String partitionToken;
-  // Unique partition token of the parent that generated this partition.
-  private String parentToken;
+  // Unique partition token of the parents that generated this partition.
+  private List<String> parentTokens;
   // Start timestamp, used to query the partition.
   private Timestamp startTimestamp;
   // Whether the start timestamp is inclusive or exclusive.
@@ -58,7 +74,7 @@ public class PartitionMetadata {
 
   PartitionMetadata(
       String partitionToken,
-      String parentToken,
+      List<String> parentTokens,
       Timestamp startTimestamp,
       boolean inclusiveStart,
       Timestamp endTimestamp,
@@ -68,7 +84,7 @@ public class PartitionMetadata {
       Timestamp createdAt,
       Timestamp updatedAt) {
     this.partitionToken = partitionToken;
-    this.parentToken = parentToken;
+    this.parentTokens = parentTokens;
     this.startTimestamp = startTimestamp;
     this.inclusiveStart = inclusiveStart;
     this.endTimestamp = endTimestamp;
@@ -87,12 +103,12 @@ public class PartitionMetadata {
     this.partitionToken = partitionToken;
   }
 
-  public String getParentToken() {
-    return parentToken;
+  public List<String> getParentTokens() {
+    return parentTokens;
   }
 
-  public void setParentToken(String parentToken) {
-    this.parentToken = parentToken;
+  public void setParentTokens(List<String> parentTokens) {
+    this.parentTokens = parentTokens;
   }
 
   public Timestamp getStartTimestamp() {
@@ -159,6 +175,31 @@ public class PartitionMetadata {
     this.updatedAt = updatedAt;
   }
 
+  public Mutation toMutation(String table) {
+    return Mutation.newInsertBuilder(table)
+        .set(COLUMN_PARTITION_TOKEN)
+        .to(getPartitionToken())
+        .set(COLUMN_PARENT_TOKEN)
+        .toStringArray(getParentTokens())
+        .set(COLUMN_START_TIMESTAMP)
+        .to(getStartTimestamp())
+        .set(COLUMN_INCLUSIVE_START)
+        .to(isInclusiveStart())
+        .set(COLUMN_END_TIMESTAMP)
+        .to(getEndTimestamp())
+        .set(COLUMN_INCLUSIVE_END)
+        .to(isInclusiveEnd())
+        .set(COLUMN_HEARTBEAT_SECONDS)
+        .to(getHeartbeatSeconds())
+        .set(COLUMN_STATE)
+        .to(getState().toString())
+        .set(COLUMN_CREATED_AT)
+        .to(getCreatedAt())
+        .set(COLUMN_UPDATED_AT)
+        .to(getUpdatedAt())
+        .build();
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -172,7 +213,7 @@ public class PartitionMetadata {
         && isInclusiveEnd() == partitionMetadata.isInclusiveEnd()
         && getHeartbeatSeconds() == partitionMetadata.getHeartbeatSeconds()
         && Objects.equal(getPartitionToken(), partitionMetadata.getPartitionToken())
-        && Objects.equal(getParentToken(), partitionMetadata.getParentToken())
+        && Objects.equal(getParentTokens(), partitionMetadata.getParentTokens())
         && Objects.equal(getStartTimestamp(), partitionMetadata.getStartTimestamp())
         && Objects.equal(getEndTimestamp(), partitionMetadata.getEndTimestamp())
         && getState() == partitionMetadata.getState()
@@ -184,7 +225,7 @@ public class PartitionMetadata {
   public int hashCode() {
     return Objects.hashCode(
         getPartitionToken(),
-        getParentToken(),
+        getParentTokens(),
         getStartTimestamp(),
         isInclusiveStart(),
         getEndTimestamp(),
@@ -202,7 +243,7 @@ public class PartitionMetadata {
   public static class Builder {
 
     private String partitionToken;
-    private String parentToken;
+    private List<String> parentTokens;
     private Timestamp startTimestamp;
     private Boolean inclusiveStart;
     private Timestamp endTimestamp;
@@ -217,8 +258,8 @@ public class PartitionMetadata {
       return this;
     }
 
-    public Builder setParentToken(String parentToken) {
-      this.parentToken = parentToken;
+    public Builder setParentTokens(List<String> parentTokens) {
+      this.parentTokens = parentTokens;
       return this;
     }
 
@@ -264,7 +305,7 @@ public class PartitionMetadata {
 
     public PartitionMetadata build() {
       Preconditions.checkState(partitionToken != null, "partitionToken");
-      Preconditions.checkState(parentToken != null, "parentToken");
+      Preconditions.checkState(parentTokens != null, "parentTokens");
       Preconditions.checkState(startTimestamp != null, "startTimestamp");
       Preconditions.checkState(heartbeatSeconds != null, "heartbeatSeconds");
       Preconditions.checkState(state != null, "state");
@@ -276,7 +317,7 @@ public class PartitionMetadata {
       }
       return new PartitionMetadata(
           partitionToken,
-          parentToken,
+          parentTokens,
           startTimestamp,
           inclusiveStart,
           endTimestamp,

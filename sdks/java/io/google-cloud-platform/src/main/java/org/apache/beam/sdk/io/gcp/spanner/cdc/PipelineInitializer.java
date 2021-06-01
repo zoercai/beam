@@ -17,20 +17,44 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_CREATED_AT;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_END_TIMESTAMP;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_HEARTBEAT_SECONDS;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_INCLUSIVE_END;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_INCLUSIVE_START;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_PARENT_TOKEN;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_PARTITION_TOKEN;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_START_TIMESTAMP;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_STATE;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_UPDATED_AT;
+
 import com.google.api.gax.longrunning.OperationFuture;
+import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.DatabaseAdminClient;
+import com.google.cloud.spanner.DatabaseClient;
 import com.google.cloud.spanner.DatabaseId;
 import com.google.cloud.spanner.SpannerException;
 import com.google.cloud.spanner.SpannerExceptionFactory;
+import com.google.common.collect.ImmutableList;
 import com.google.spanner.admin.database.v1.UpdateDatabaseDdlMetadata;
 import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import javax.annotation.Nullable;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.State;
 
 public class PipelineInitializer {
 
-  public void initialize(DatabaseAdminClient dbAdminClient, DatabaseId id) {
+  private static final String DEFAULT_PARENT_PARTITION_TOKEN = "Parent0";
+  private static final ImmutableList<String> DEFAULT_PARENT_TOKENS = ImmutableList.of();
+  private static final long DEFAULT_HEARTBEAT_SECONDS = 1;
+
+  public void initialize(DatabaseAdminClient dbAdminClient,
+      DatabaseClient databaseClient, DatabaseId id, Timestamp inclusiveStartAt,
+      @Nullable Timestamp exclusiveEndAt) {
     createMetadataTable(dbAdminClient, id);
+    addFakeParentPartition(databaseClient, id, inclusiveStartAt, exclusiveEndAt);
   }
 
   private void createMetadataTable(DatabaseAdminClient dbAdminClient, DatabaseId id) {
@@ -40,16 +64,16 @@ public class PipelineInitializer {
             + "_"
             + UUID.randomUUID()
             + " ("
-            + "  PartitionToken STRING(MAX) NOT NULL,"
-            + "  ParentToken STRING(MAX) NOT NULL,"
-            + "  StartTimestamp TIMESTAMP NOT NULL,"
-            + "  InclusiveStart BOOL NOT NULL, "
-            + "  EndTimestamp TIMESTAMP,"
-            + "  InclusiveEnd BOOL,"
-            + "  HeartbeatSeconds INT64 NOT NULL,"
-            + "  State STRING(MAX) NOT NULL,"
-            + "  CreatedAt TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),"
-            + "  UpdatedAt TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true)"
+            + COLUMN_PARTITION_TOKEN + " STRING(MAX) NOT NULL,"
+            + COLUMN_PARENT_TOKEN + " STRING(MAX) NOT NULL,"
+            + COLUMN_START_TIMESTAMP + " TIMESTAMP NOT NULL,"
+            + COLUMN_INCLUSIVE_START + " BOOL NOT NULL, "
+            + COLUMN_END_TIMESTAMP + " TIMESTAMP,"
+            + COLUMN_INCLUSIVE_END + " BOOL,"
+            + COLUMN_HEARTBEAT_SECONDS + " INT64 NOT NULL,"
+            + COLUMN_STATE + " STRING(MAX) NOT NULL,"
+            + COLUMN_CREATED_AT + " TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),"
+            + COLUMN_UPDATED_AT + " TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true)"
             + ") PRIMARY KEY (PartitionToken);";
     OperationFuture<Void, UpdateDatabaseDdlMetadata> op =
         dbAdminClient.updateDatabaseDdl(
@@ -68,5 +92,18 @@ public class PipelineInitializer {
       // and the thread is interrupted, either before or during the activity.
       throw SpannerExceptionFactory.propagateInterrupt(e);
     }
+  }
+
+  private void addFakeParentPartition(DatabaseClient databaseClient,
+      DatabaseId id, Timestamp inclusiveStartAt, @Nullable Timestamp exclusiveEndAt) {
+    PartitionMetadata parentPartition = PartitionMetadata.newBuilder()
+        .setPartitionToken(DEFAULT_PARENT_PARTITION_TOKEN)
+        .setParentTokens(DEFAULT_PARENT_TOKENS)
+        .setStartTimestamp(inclusiveStartAt)
+        .setEndTimestamp(exclusiveEndAt)
+        .setHeartbeatSeconds(DEFAULT_HEARTBEAT_SECONDS)
+        .setState(State.CREATED)
+        .build();
+    databaseClient.write(ImmutableList.of(parentPartition.toMutation(id.getName())));
   }
 }

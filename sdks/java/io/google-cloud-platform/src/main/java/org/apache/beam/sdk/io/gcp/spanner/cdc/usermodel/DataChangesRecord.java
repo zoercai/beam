@@ -29,11 +29,11 @@ public class DataChangesRecord implements Serializable {
 
   private static final long serialVersionUID = 1138762498767540898L;
 
-  private PartitionId partitionId;
+  private String partitionToken;
   private Timestamp commitTimestamp;
-  private TransactionId transactionId;
+  private String transactionId;
   private boolean isLastRecordInTransactionPartition;
-  private RecordSequence recordSequence;
+  private String recordSequence;
   private String tableName;
   private List<ColumnType> rowType;
   private List<Mod> mods;
@@ -41,18 +41,18 @@ public class DataChangesRecord implements Serializable {
   private ValueCaptureType valueCaptureType;
 
   public DataChangesRecord(
-      PartitionId partitionId,
+      String partitionToken,
       Timestamp commitTimestamp,
-      TransactionId transactionId,
+      String transactionId,
       boolean isLastRecordInTransactionPartition,
-      RecordSequence recordSequence,
+      String recordSequence,
       String tableName,
       List<ColumnType> rowType,
       List<Mod> mods,
       ModType modType,
       ValueCaptureType valueCaptureType) {
     this.commitTimestamp = commitTimestamp;
-    this.partitionId = partitionId;
+    this.partitionToken = partitionToken;
     this.transactionId = transactionId;
     this.isLastRecordInTransactionPartition = isLastRecordInTransactionPartition;
     this.recordSequence = recordSequence;
@@ -63,12 +63,12 @@ public class DataChangesRecord implements Serializable {
     this.valueCaptureType = valueCaptureType;
   }
 
-  public PartitionId getPartitionId() {
-    return partitionId;
+  public String getPartitionToken() {
+    return partitionToken;
   }
 
-  public void setPartitionId(PartitionId partitionId) {
-    this.partitionId = partitionId;
+  public void setPartitionToken(String partitionToken) {
+    this.partitionToken = partitionToken;
   }
 
   public Timestamp getCommitTimestamp() {
@@ -79,11 +79,11 @@ public class DataChangesRecord implements Serializable {
     this.commitTimestamp = commitTimestamp;
   }
 
-  public TransactionId getTransactionId() {
+  public String getTransactionId() {
     return transactionId;
   }
 
-  public void setTransactionId(TransactionId transactionId) {
+  public void setTransactionId(String transactionId) {
     this.transactionId = transactionId;
   }
 
@@ -95,11 +95,11 @@ public class DataChangesRecord implements Serializable {
     isLastRecordInTransactionPartition = lastRecordInTransactionPartition;
   }
 
-  public RecordSequence getRecordSequence() {
+  public String getRecordSequence() {
     return recordSequence;
   }
 
-  public void setRecordSequence(RecordSequence recordSequence) {
+  public void setRecordSequence(String recordSequence) {
     this.recordSequence = recordSequence;
   }
 
@@ -154,7 +154,7 @@ public class DataChangesRecord implements Serializable {
     DataChangesRecord that = (DataChangesRecord) o;
     return isLastRecordInTransactionPartition == that.isLastRecordInTransactionPartition
         && Objects.equals(commitTimestamp, that.commitTimestamp)
-        && Objects.equals(partitionId, that.partitionId)
+        && Objects.equals(partitionToken, that.partitionToken)
         && Objects.equals(transactionId, that.transactionId)
         && Objects.equals(recordSequence, that.recordSequence)
         && Objects.equals(tableName, that.tableName)
@@ -168,7 +168,7 @@ public class DataChangesRecord implements Serializable {
   public int hashCode() {
     return Objects.hash(
         commitTimestamp,
-        partitionId,
+        partitionToken,
         transactionId,
         isLastRecordInTransactionPartition,
         recordSequence,
