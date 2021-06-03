@@ -72,7 +72,8 @@ public abstract class SpannerConfig implements Serializable {
         .build();
   }
 
-  static Builder builder() {
+  @VisibleForTesting
+  public static Builder builder() {
     return new AutoValue_SpannerConfig.Builder();
   }
 

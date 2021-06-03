@@ -16,17 +16,16 @@
 
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
-import com.google.common.annotations.VisibleForTesting;
+import com.google.cloud.spanner.DatabaseClient;
+import com.google.cloud.spanner.ResultSet;
+import com.google.cloud.spanner.Statement;
+import com.google.cloud.spanner.Struct;
 import java.io.Serializable;
-import java.util.Collections;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerAccessor;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.usermodel.DataChangesRecord;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.usermodel.ModType;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.usermodel.PartitionId;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.usermodel.RecordSequence;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.usermodel.TransactionId;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.usermodel.ValueCaptureType;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.RecordMapper;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
 import org.apache.beam.sdk.io.range.OffsetRange;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.DoFn.UnboundedPerElement;
@@ -36,59 +35,57 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @UnboundedPerElement
-public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionId, DataChangesRecord> implements
+public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataChangesRecord> implements
     Serializable {
 
+  private static final long serialVersionUID = -7574596218085711975L;
   private static final Logger LOG = LoggerFactory.getLogger(ReadChangeStreamPartitionDoFn.class);
-  private final SpannerConfig spannerConfig;
-  private final transient SpannerAccessor spannerAccessor;
+
+  private SpannerConfig spannerConfig;
+
+  // TODO: Check if this is really necessary
+  private ReadChangeStreamPartitionDoFn() {}
 
   public ReadChangeStreamPartitionDoFn(SpannerConfig spannerConfig) {
-    this(spannerConfig, SpannerAccessor.getOrCreate(spannerConfig));
-  }
-
-  @VisibleForTesting
-  ReadChangeStreamPartitionDoFn(SpannerConfig spannerConfig, SpannerAccessor spannerAccessor) {
     this.spannerConfig = spannerConfig;
-    this.spannerAccessor = spannerAccessor;
   }
 
   @GetInitialRestriction
-  public OffsetRange initialRestriction(@Element PartitionId partitionRecord) {
+  public OffsetRange initialRestriction(@Element PartitionMetadata element) {
     return new OffsetRange(0, 1);
   }
 
   @ProcessElement
   public ProcessContinuation processElement(
-      @Element PartitionId partitionRecord,
+      @Element PartitionMetadata element,
       RestrictionTracker<OffsetRange, Long> tracker,
       OutputReceiver<DataChangesRecord> receiver
   ) {
-    LOG.info("Claiming restriction");
-    if (!tracker.tryClaim(0L)) {
-      LOG.warn("Could not claim restriction, stopping");
+    // FIXME: These variables should be moved from here
+    final SpannerAccessor spannerAccessor = SpannerAccessor.getOrCreate(spannerConfig);
+    final DatabaseClient databaseClient = spannerAccessor.getDatabaseClient();
+    final RecordMapper recordMapper = new RecordMapper();
+    try (ResultSet resultSet = databaseClient.singleUse().executeQuery(Statement.of("SELECT 1"))) {
+      while (resultSet.next()) {
+        // FIXME: We should not only get the first record
+        final Struct rowAsStruct = resultSet.getCurrentRowAsStruct().getStructList(0).get(0).getStruct("data_change_record");
+        final DataChangesRecord dataChangesRecord = recordMapper.toDataChangesRecord(element.getPartitionToken(), rowAsStruct);
+        if (!tracker.tryClaim(0L)) {
+          return ProcessContinuation.stop();
+        }
+        // FIXME: The timestamp should be the record timestamp
+        final Instant timestamp = Instant.now();
+        LOG.info("Outputting record with timestamp " + timestamp);
+        receiver.outputWithTimestamp(dataChangesRecord, timestamp);
+      }
+
+      // FIXME: This should be a resume
       return ProcessContinuation.stop();
     }
+  }
 
-    LOG.info("Building data record");
-    final DataChangesRecord record = new DataChangesRecord(
-        PartitionId.of(1L),
-        Instant.now(),
-        TransactionId.of(2L),
-        false,
-        RecordSequence.of(3L),
-        "TableName",
-        Collections.emptyList(),
-        Collections.emptyList(),
-        ModType.INSERT,
-        ValueCaptureType.OLD_AND_NEW_VALUES
-    );
-
-    final Instant timestamp = Instant.now();
-    LOG.info("Outputting record with timestamp " + timestamp);
-    receiver.outputWithTimestamp(record, timestamp);
-
-    LOG.info("Finalising");
-    return ProcessContinuation.stop();
+  // TODO: Check if this is really necessary
+  public void setSpannerConfig(SpannerConfig spannerConfig) {
+    this.spannerConfig = spannerConfig;
   }
 }

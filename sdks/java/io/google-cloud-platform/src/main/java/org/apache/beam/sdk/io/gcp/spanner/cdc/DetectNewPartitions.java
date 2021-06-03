@@ -17,6 +17,7 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
 import org.apache.beam.sdk.transforms.DoFn;
 
-public class DetectNewPartitions extends DoFn<Integer, String> {}
+public class DetectNewPartitions extends DoFn<Integer, PartitionMetadata> {}

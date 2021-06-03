@@ -55,9 +55,9 @@ import org.apache.beam.sdk.annotations.Experimental.Kind;
 import org.apache.beam.sdk.coders.SerializableCoder;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.DetectNewPartitions;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.PipelineInitializer;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.ReadPartitionChangeStream;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.ReadChangeStreamPartitionDoFn;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Distribution;
 import org.apache.beam.sdk.metrics.Metrics;
@@ -1416,7 +1416,7 @@ public class SpannerIO {
       return input
           .apply("Execute query", Create.of(1))
           .apply(ParDo.of(new DetectNewPartitions()))
-          .apply(new ReadPartitionChangeStream());
+          .apply(ParDo.of(new ReadChangeStreamPartitionDoFn(getSpannerConfig())));
     }
   }
 
