@@ -15,18 +15,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.gcp.spanner.cdc;
+package org.apache.beam.sdk.io.gcp.spanner.cdc.model;
 
 import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.Mutation;
 import java.util.List;
+import java.io.Serializable;
+import org.apache.avro.reflect.AvroEncode;
+import org.apache.beam.sdk.coders.AvroCoder;
+import org.apache.beam.sdk.coders.DefaultCoder;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.TimestampEncoding;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Objects;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions;
 
 /**
  * Model for the partition metadata database table used in the Connector.
  */
-public class PartitionMetadata {
+@DefaultCoder(AvroCoder.class)
+public class PartitionMetadata implements Serializable {
+
+  private static final long serialVersionUID = 995720273301116075L;
 
   public enum State {
     // The partition has been discovered and is waiting to be started
@@ -38,16 +46,16 @@ public class PartitionMetadata {
   }
 
   // Metadata table column names
-  static final String COLUMN_PARTITION_TOKEN = "PartitionToken";
-  static final String COLUMN_PARENT_TOKEN = "ParentToken";
-  static final String COLUMN_START_TIMESTAMP = "StartTimestamp";
-  static final String COLUMN_INCLUSIVE_START = "InclusiveStart";
-  static final String COLUMN_END_TIMESTAMP = "EndTimestamp";
-  static final String COLUMN_INCLUSIVE_END = "InclusiveEnd";
-  static final String COLUMN_HEARTBEAT_SECONDS = "HeartbeatSeconds";
-  static final String COLUMN_STATE = "State";
-  static final String COLUMN_CREATED_AT = "CreatedAt";
-  static final String COLUMN_UPDATED_AT = "UpdatedAt";
+  public static final String COLUMN_PARTITION_TOKEN = "PartitionToken";
+  public static final String COLUMN_PARENT_TOKEN = "ParentToken";
+  public static final String COLUMN_START_TIMESTAMP = "StartTimestamp";
+  public static final String COLUMN_INCLUSIVE_START = "InclusiveStart";
+  public static final String COLUMN_END_TIMESTAMP = "EndTimestamp";
+  public static final String COLUMN_INCLUSIVE_END = "InclusiveEnd";
+  public static final String COLUMN_HEARTBEAT_SECONDS = "HeartbeatSeconds";
+  public static final String COLUMN_STATE = "State";
+  public static final String COLUMN_CREATED_AT = "CreatedAt";
+  public static final String COLUMN_UPDATED_AT = "UpdatedAt";
 
   // Unique partition token, obtained from the Child Partition record from the Change Streams API
   // call.
@@ -55,10 +63,12 @@ public class PartitionMetadata {
   // Unique partition token of the parents that generated this partition.
   private List<String> parentTokens;
   // Start timestamp, used to query the partition.
+  @AvroEncode(using = TimestampEncoding.class)
   private Timestamp startTimestamp;
   // Whether the start timestamp is inclusive or exclusive.
   private boolean inclusiveStart;
   // The end timestamp, used to query the partition
+  @AvroEncode(using = TimestampEncoding.class)
   private Timestamp endTimestamp;
   // Whether the end timestamp is inclusive or exclusive.
   private boolean inclusiveEnd;
@@ -68,9 +78,16 @@ public class PartitionMetadata {
   // The current state of the partition in the Connector.
   private State state;
   // When the row was inserted.
+  @AvroEncode(using = TimestampEncoding.class)
   private Timestamp createdAt;
   // When the row was updated.
+  @AvroEncode(using = TimestampEncoding.class)
   private Timestamp updatedAt;
+
+  /**
+   * Default constructor for serialization only.
+   */
+  private PartitionMetadata() {}
 
   PartitionMetadata(
       String partitionToken,

@@ -15,32 +15,57 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.gcp.spanner.cdc.usermodel;
+package org.apache.beam.sdk.io.gcp.spanner.cdc.model;
 
 import java.io.Serializable;
 import java.util.Objects;
 import org.apache.beam.sdk.coders.AvroCoder;
 import org.apache.beam.sdk.coders.DefaultCoder;
+import org.apache.beam.sdk.schemas.annotations.SchemaCreate;
 
 @DefaultCoder(AvroCoder.class)
-public class TypeCode implements Serializable {
+public class ColumnType implements Serializable {
 
-  private static final long serialVersionUID = -1935648338090036611L;
+  private static final long serialVersionUID = 6861617019875340414L;
 
-  private String code;
+  private String name;
+  private TypeCode type;
+  private boolean isPrimaryKey;
 
-  public TypeCode() {}
+  /**
+   * Default constructor for serialization only.
+   */
+  private ColumnType() {}
 
-  public TypeCode(String code) {
-    this.code = code;
+  @SchemaCreate
+  public ColumnType(String name, TypeCode type, boolean isPrimaryKey) {
+    this.name = name;
+    this.type = type;
+    this.isPrimaryKey = isPrimaryKey;
   }
 
-  public String getCode() {
-    return code;
+  public String getName() {
+    return name;
   }
 
-  public void setCode(String code) {
-    this.code = code;
+  public void setName(String name) {
+    this.name = name;
+  }
+
+  public TypeCode getType() {
+    return type;
+  }
+
+  public void setType(TypeCode type) {
+    this.type = type;
+  }
+
+  public boolean isPrimaryKey() {
+    return isPrimaryKey;
+  }
+
+  public void setPrimaryKey(boolean primaryKey) {
+    isPrimaryKey = primaryKey;
   }
 
   @Override
@@ -51,12 +76,14 @@ public class TypeCode implements Serializable {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    TypeCode typeCode = (TypeCode) o;
-    return Objects.equals(code, typeCode.code);
+    ColumnType that = (ColumnType) o;
+    return isPrimaryKey == that.isPrimaryKey
+        && Objects.equals(name, that.name)
+        && Objects.equals(type, that.type);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(code);
+    return Objects.hash(name, type, isPrimaryKey);
   }
 }

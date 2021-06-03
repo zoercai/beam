@@ -17,16 +17,16 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_CREATED_AT;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_END_TIMESTAMP;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_HEARTBEAT_SECONDS;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_INCLUSIVE_END;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_INCLUSIVE_START;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_PARENT_TOKEN;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_PARTITION_TOKEN;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_START_TIMESTAMP;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_STATE;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.COLUMN_UPDATED_AT;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_CREATED_AT;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_END_TIMESTAMP;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_HEARTBEAT_SECONDS;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_INCLUSIVE_END;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_INCLUSIVE_START;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_PARENT_TOKEN;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_PARTITION_TOKEN;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_START_TIMESTAMP;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_STATE;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_UPDATED_AT;
 
 import com.google.api.gax.longrunning.OperationFuture;
 import com.google.cloud.Timestamp;
@@ -41,7 +41,8 @@ import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.PartitionMetadata.State;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
 
 public class PipelineInitializer {
 

@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.gcp.spanner.cdc.usermodel;
+package org.apache.beam.sdk.io.gcp.spanner.cdc.model;
 
 import java.io.Serializable;
 import java.util.Objects;
@@ -23,26 +23,27 @@ import org.apache.beam.sdk.coders.AvroCoder;
 import org.apache.beam.sdk.coders.DefaultCoder;
 
 @DefaultCoder(AvroCoder.class)
-public class RecordSequence implements Serializable, Comparable<RecordSequence> {
+public class TypeCode implements Serializable {
 
-  private static final long serialVersionUID = -854139231254129678L;
+  private static final long serialVersionUID = -1935648338090036611L;
 
-  private Long value;
+  private String code;
 
-  public static RecordSequence of(Long value) {
-    return new RecordSequence(value);
+  /**
+   * Default constructor for serialization only.
+   */
+  private TypeCode() {}
+
+  public TypeCode(String code) {
+    this.code = code;
   }
 
-  public RecordSequence(Long value) {
-    this.value = value;
+  public String getCode() {
+    return code;
   }
 
-  public long getValue() {
-    return value;
-  }
-
-  public void setValue(Long value) {
-    this.value = value;
+  public void setCode(String code) {
+    this.code = code;
   }
 
   @Override
@@ -53,17 +54,12 @@ public class RecordSequence implements Serializable, Comparable<RecordSequence> 
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    RecordSequence that = (RecordSequence) o;
-    return Objects.equals(value, that.value);
+    TypeCode typeCode = (TypeCode) o;
+    return Objects.equals(code, typeCode.code);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(value);
-  }
-
-  @Override
-  public int compareTo(RecordSequence other) {
-    return Long.compare(this.value, other.value);
+    return Objects.hash(code);
   }
 }
