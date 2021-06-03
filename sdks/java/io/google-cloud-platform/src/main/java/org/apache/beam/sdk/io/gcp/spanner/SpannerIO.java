@@ -57,6 +57,7 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.DetectNewPartitions;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.PipelineInitializer;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.ReadPartitionChangeStream;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao;
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Distribution;
 import org.apache.beam.sdk.metrics.Metrics;
@@ -1386,9 +1387,9 @@ public class SpannerIO {
       }
 
       SpannerAccessor spannerAccessor = SpannerAccessor.getOrCreate(getSpannerConfig());
-      DatabaseAdminClient dbAdminClient = spannerAccessor.getDatabaseAdminClient();
+      DatabaseAdminClient databaseAdminClient = spannerAccessor.getDatabaseAdminClient();
       DatabaseClient databaseClient = spannerAccessor.getDatabaseClient();
-      Database changeStreamsDb = dbAdminClient.getDatabase(getSpannerConfig().getInstanceId().get(),
+      Database changeStreamsDb = databaseAdminClient.getDatabase(getSpannerConfig().getInstanceId().get(),
           getSpannerConfig().getDatabaseId().get());
 
       // Start time must be within data retention period
@@ -1400,13 +1401,14 @@ public class SpannerIO {
           "Start time must not be before the change stream creation time.");
 
       PipelineInitializer pipelineInitializer = new PipelineInitializer();
+      PartitionMetadataDao partitionMetadataDao = new PartitionMetadataDao(databaseClient);
       DatabaseId databaseId = DatabaseId.of(
           getSpannerConfig().getProjectId().get(),
           getSpannerConfig().getInstanceId().get(),
           getSpannerConfig().getDatabaseId().get());
       pipelineInitializer.initialize(
-          dbAdminClient,
-          databaseClient,
+          databaseAdminClient,
+          partitionMetadataDao,
           databaseId,
           getInclusiveStartAt(),
           getExclusiveEndAt());

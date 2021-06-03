@@ -18,9 +18,8 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.model;
 
 import com.google.cloud.Timestamp;
-import com.google.cloud.spanner.Mutation;
-import java.util.List;
 import java.io.Serializable;
+import java.util.List;
 import org.apache.avro.reflect.AvroEncode;
 import org.apache.beam.sdk.coders.AvroCoder;
 import org.apache.beam.sdk.coders.DefaultCoder;
@@ -44,18 +43,6 @@ public class PartitionMetadata implements Serializable {
     // The partition has ended
     FINISHED
   }
-
-  // Metadata table column names
-  public static final String COLUMN_PARTITION_TOKEN = "PartitionToken";
-  public static final String COLUMN_PARENT_TOKEN = "ParentToken";
-  public static final String COLUMN_START_TIMESTAMP = "StartTimestamp";
-  public static final String COLUMN_INCLUSIVE_START = "InclusiveStart";
-  public static final String COLUMN_END_TIMESTAMP = "EndTimestamp";
-  public static final String COLUMN_INCLUSIVE_END = "InclusiveEnd";
-  public static final String COLUMN_HEARTBEAT_SECONDS = "HeartbeatSeconds";
-  public static final String COLUMN_STATE = "State";
-  public static final String COLUMN_CREATED_AT = "CreatedAt";
-  public static final String COLUMN_UPDATED_AT = "UpdatedAt";
 
   // Unique partition token, obtained from the Child Partition record from the Change Streams API
   // call.
@@ -190,31 +177,6 @@ public class PartitionMetadata implements Serializable {
 
   public void setUpdatedAt(Timestamp updatedAt) {
     this.updatedAt = updatedAt;
-  }
-
-  public Mutation toInsertMutation(String table) {
-    return Mutation.newInsertBuilder(table)
-        .set(COLUMN_PARTITION_TOKEN)
-        .to(getPartitionToken())
-        .set(COLUMN_PARENT_TOKEN)
-        .toStringArray(getParentTokens())
-        .set(COLUMN_START_TIMESTAMP)
-        .to(getStartTimestamp())
-        .set(COLUMN_INCLUSIVE_START)
-        .to(isInclusiveStart())
-        .set(COLUMN_END_TIMESTAMP)
-        .to(getEndTimestamp())
-        .set(COLUMN_INCLUSIVE_END)
-        .to(isInclusiveEnd())
-        .set(COLUMN_HEARTBEAT_SECONDS)
-        .to(getHeartbeatSeconds())
-        .set(COLUMN_STATE)
-        .to(getState().toString())
-        .set(COLUMN_CREATED_AT)
-        .to(getCreatedAt())
-        .set(COLUMN_UPDATED_AT)
-        .to(getUpdatedAt())
-        .build();
   }
 
   @Override

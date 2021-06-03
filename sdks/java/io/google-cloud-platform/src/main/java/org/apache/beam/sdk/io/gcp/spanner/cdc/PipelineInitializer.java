@@ -17,21 +17,20 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_CREATED_AT;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_END_TIMESTAMP;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_HEARTBEAT_SECONDS;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_INCLUSIVE_END;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_INCLUSIVE_START;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_PARENT_TOKEN;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_PARTITION_TOKEN;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_START_TIMESTAMP;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_STATE;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.COLUMN_UPDATED_AT;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao.COLUMN_CREATED_AT;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao.COLUMN_END_TIMESTAMP;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao.COLUMN_HEARTBEAT_SECONDS;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao.COLUMN_INCLUSIVE_END;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao.COLUMN_INCLUSIVE_START;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao.COLUMN_PARENT_TOKEN;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao.COLUMN_PARTITION_TOKEN;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao.COLUMN_START_TIMESTAMP;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao.COLUMN_STATE;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao.COLUMN_UPDATED_AT;
 
 import com.google.api.gax.longrunning.OperationFuture;
 import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.DatabaseAdminClient;
-import com.google.cloud.spanner.DatabaseClient;
 import com.google.cloud.spanner.DatabaseId;
 import com.google.cloud.spanner.SpannerException;
 import com.google.cloud.spanner.SpannerExceptionFactory;
@@ -41,8 +40,9 @@ import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadataDao;
 
 public class PipelineInitializer {
 
@@ -50,14 +50,14 @@ public class PipelineInitializer {
   private static final ImmutableList<String> DEFAULT_PARENT_TOKENS = ImmutableList.of();
   private static final long DEFAULT_HEARTBEAT_SECONDS = 1;
 
-  public void initialize(DatabaseAdminClient dbAdminClient,
-      DatabaseClient databaseClient, DatabaseId id, Timestamp inclusiveStartAt,
+  public void initialize(DatabaseAdminClient databaseAdminClient,
+      PartitionMetadataDao partitionMetadataDao, DatabaseId id, Timestamp inclusiveStartAt,
       @Nullable Timestamp exclusiveEndAt) {
-    createMetadataTable(dbAdminClient, id);
-    addFakeParentPartition(databaseClient, id, inclusiveStartAt, exclusiveEndAt);
+    createMetadataTable(databaseAdminClient, id);
+    createFakeParentPartition(partitionMetadataDao, id, inclusiveStartAt, exclusiveEndAt);
   }
 
-  private void createMetadataTable(DatabaseAdminClient dbAdminClient, DatabaseId id) {
+  private void createMetadataTable(DatabaseAdminClient databaseAdminClient, DatabaseId id) {
     final String metadataCreateStmt =
         "CREATE TABLE CDC_Partitions_"
             + id.getName()
@@ -76,7 +76,7 @@ public class PipelineInitializer {
             + COLUMN_UPDATED_AT + " TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true)"
             + ") PRIMARY KEY (PartitionToken);";
     OperationFuture<Void, UpdateDatabaseDdlMetadata> op =
-        dbAdminClient.updateDatabaseDdl(
+        databaseAdminClient.updateDatabaseDdl(
             id.getInstanceId().getInstance(),
             id.getDatabase(),
             Collections.singletonList(metadataCreateStmt),
@@ -94,7 +94,7 @@ public class PipelineInitializer {
     }
   }
 
-  private void addFakeParentPartition(DatabaseClient databaseClient,
+  private void createFakeParentPartition(PartitionMetadataDao partitionMetadataDao,
       DatabaseId id, Timestamp inclusiveStartAt, @Nullable Timestamp exclusiveEndAt) {
     PartitionMetadata parentPartition = PartitionMetadata.newBuilder()
         .setPartitionToken(DEFAULT_PARENT_PARTITION_TOKEN)
@@ -104,6 +104,6 @@ public class PipelineInitializer {
         .setHeartbeatSeconds(DEFAULT_HEARTBEAT_SECONDS)
         .setState(State.CREATED)
         .build();
-    databaseClient.write(ImmutableList.of(parentPartition.toInsertMutation(id.getName())));
+    partitionMetadataDao.insert(id.getDatabase(), parentPartition);
   }
 }
