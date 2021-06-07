@@ -1,9 +1,11 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.TestStructMapper.recordsToStruct;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 import static org.powermock.api.mockito.PowerMockito.mockStatic;
 
 import com.google.cloud.Timestamp;
@@ -45,7 +47,6 @@ public class ReadChangeStreamPartitionDoFnTest {
 
   private DatabaseClient databaseClient;
   private ReadChangeStreamPartitionDoFn doFn;
-  private TestStructMapper testStructMapper;
   private TestStream<PartitionMetadata> testStream;
 
   @Rule
@@ -53,20 +54,12 @@ public class ReadChangeStreamPartitionDoFnTest {
 
   @Before
   public void setUp() {
-    final SpannerConfig spannerConfig = SpannerConfig
-        .create()
-        .withProjectId("my-project")
-        .withInstanceId("my-instance")
-        .withDatabaseId("my-database");
+    final SpannerConfig spannerConfig = mock(SpannerConfig.class, withSettings().serializable());
     final SpannerAccessor spannerAccessor = mock(SpannerAccessor.class);
-
     mockStatic(SpannerAccessor.class);
-    databaseClient = mock(DatabaseClient.class, RETURNS_DEEP_STUBS);
-    testStructMapper = new TestStructMapper();
-    doFn = new ReadChangeStreamPartitionDoFn(spannerConfig);
 
-    when(SpannerAccessor.getOrCreate(spannerConfig)).thenReturn(spannerAccessor);
-    when(spannerAccessor.getDatabaseClient()).thenReturn(databaseClient);
+    databaseClient = mock(DatabaseClient.class, RETURNS_DEEP_STUBS);
+    doFn = new ReadChangeStreamPartitionDoFn(spannerConfig);
     testStream = TestStream
         .create(AvroCoder.of(PartitionMetadata.class))
         .addElements(PartitionMetadata.newBuilder()
@@ -83,6 +76,9 @@ public class ReadChangeStreamPartitionDoFnTest {
             .build()
         )
         .advanceWatermarkToInfinity();
+
+    when(SpannerAccessor.getOrCreate(spannerConfig)).thenReturn(spannerAccessor);
+    when(spannerAccessor.getDatabaseClient()).thenReturn(databaseClient);
   }
 
   // --------------------------
@@ -118,7 +114,7 @@ public class ReadChangeStreamPartitionDoFnTest {
         ModType.UPDATE,
         ValueCaptureType.OLD_AND_NEW_VALUES
     );
-    final Struct expectedRecordAsStruct = testStructMapper.toStruct(expectedRecord);
+    final Struct expectedRecordAsStruct = recordsToStruct(expectedRecord);
     final ResultSet resultSet = mock(ResultSet.class);
 
     when(databaseClient.singleUse().executeQuery(any(Statement.class))).thenReturn(resultSet);

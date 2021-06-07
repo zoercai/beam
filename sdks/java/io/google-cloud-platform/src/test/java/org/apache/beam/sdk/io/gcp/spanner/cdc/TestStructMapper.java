@@ -71,23 +71,19 @@ public class TestStructMapper {
       StructField.of("heartbeat_record", HEARTBEAT_RECORD_TYPE),
       StructField.of("child_partitions_record", CHILD_PARTITIONS_RECORD_TYPE)
   );
-  private final Gson gson;
+  private static final Gson gson = new Gson();
 
-  public TestStructMapper() {
-    this.gson = new Gson();
-  }
-
-  public Struct toStruct(ChangeStreamRecord... records) {
+  public static Struct recordsToStruct(ChangeStreamRecord... records) {
     return Struct
         .newBuilder()
         .add(Value.structArray(
             STREAM_RECORD_TYPE,
-            Arrays.stream(records).map(this::streamRecordStructFrom).collect(Collectors.toList())
+            Arrays.stream(records).map(TestStructMapper::streamRecordStructFrom).collect(Collectors.toList())
         ))
         .build();
   }
 
-  private Struct streamRecordStructFrom(ChangeStreamRecord record) {
+  private static Struct streamRecordStructFrom(ChangeStreamRecord record) {
     if (record instanceof DataChangesRecord) {
       return streamRecordStructFrom((DataChangesRecord) record);
     } else {
@@ -95,7 +91,7 @@ public class TestStructMapper {
     }
   }
 
-  private Struct streamRecordStructFrom(DataChangesRecord record) {
+  private static Struct streamRecordStructFrom(DataChangesRecord record) {
     return Struct
         .newBuilder()
         .set("data_change_record")
@@ -107,14 +103,14 @@ public class TestStructMapper {
         .build();
   }
 
-  private Struct recordStructFrom(DataChangesRecord record) {
+  private static Struct recordStructFrom(DataChangesRecord record) {
     final Value columnTypes = Value.structArray(
         COLUMN_TYPE_TYPE,
-        record.getRowType().stream().map(this::columnTypeStructFrom).collect(Collectors.toList())
+        record.getRowType().stream().map(TestStructMapper::columnTypeStructFrom).collect(Collectors.toList())
     );
     final Value mods = Value.structArray(
         MOD_TYPE,
-        record.getMods().stream().map(this::modStructFrom).collect(Collectors.toList())
+        record.getMods().stream().map(TestStructMapper::modStructFrom).collect(Collectors.toList())
     );
     return Struct
         .newBuilder()
@@ -148,7 +144,7 @@ public class TestStructMapper {
         .build();
   }
 
-  private Struct columnTypeStructFrom(ColumnType columnType) {
+  private static Struct columnTypeStructFrom(ColumnType columnType) {
     return Struct
         .newBuilder()
         .set("name")
@@ -165,7 +161,7 @@ public class TestStructMapper {
         .build();
   }
 
-  private Struct modStructFrom(Mod mod) {
+  private static Struct modStructFrom(Mod mod) {
     // FIXME: Mod should have a keys array
     final String keys = "";
 

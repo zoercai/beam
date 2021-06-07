@@ -1,5 +1,6 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.mapper;
 
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.TestStructMapper.recordsToStruct;
 import static org.junit.Assert.assertEquals;
 
 import com.google.cloud.Timestamp;
@@ -8,9 +9,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.TestStructMapper;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
@@ -23,12 +21,10 @@ import org.junit.Test;
 public class ChangeStreamRecordMapperTest {
 
   private ChangeStreamRecordMapper mapper;
-  private TestStructMapper testStructMapper;
 
   @Before
-  public void setUp() throws Exception {
+  public void setUp() {
     this.mapper = new ChangeStreamRecordMapper(new Gson());
-    this.testStructMapper = new TestStructMapper();
   }
 
   @Test
@@ -53,7 +49,7 @@ public class ChangeStreamRecordMapperTest {
         ModType.UPDATE,
         ValueCaptureType.OLD_AND_NEW_VALUES
     );
-    final Struct struct = testStructMapper.toStruct(dataChangesRecord);
+    final Struct struct = recordsToStruct(dataChangesRecord);
 
     assertEquals(
         Collections.singletonList(dataChangesRecord),
