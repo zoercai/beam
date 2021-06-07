@@ -54,7 +54,11 @@ public class ReadChangeStreamPartitionDoFnTest {
 
   @Before
   public void setUp() {
-    final SpannerConfig spannerConfig = mock(SpannerConfig.class, withSettings().serializable());
+    final SpannerConfig spannerConfig = SpannerConfig
+        .create()
+        .withProjectId("project-id")
+        .withInstanceId("instance-id")
+        .withDatabaseId("database-id");
     final SpannerAccessor spannerAccessor = mock(SpannerAccessor.class);
     mockStatic(SpannerAccessor.class);
 
@@ -125,6 +129,8 @@ public class ReadChangeStreamPartitionDoFnTest {
         .apply(testStream)
         .apply(ParDo.of(doFn));
 
+    // FIXME: We should assert on the restriction
+    // FIXME: We should assert on the watermark
     PAssert.that(records).containsInAnyOrder(expectedRecord);
     pipeline.run();
   }

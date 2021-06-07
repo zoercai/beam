@@ -16,6 +16,7 @@
 
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
+import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.DatabaseClient;
 import com.google.cloud.spanner.ResultSet;
 import com.google.cloud.spanner.Statement;
@@ -54,7 +55,9 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
   @GetInitialRestriction
   public OffsetRange initialRestriction(@Element PartitionMetadata element) {
-    return new OffsetRange(0, 1);
+    final long startTimestamp = element.getStartTimestamp().toSqlTimestamp().getTime();
+    final long endTimestamp = element.getEndTimestamp().toSqlTimestamp().getTime();
+    return new OffsetRange(startTimestamp, endTimestamp);
   }
 
   @Setup
@@ -75,17 +78,23 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
         final Struct rowAsStruct = resultSet.getCurrentRowAsStruct();
         final List<ChangeStreamRecord> records = changeStreamRecordMapper
             .toChangeStreamRecords(element.getPartitionToken(), rowAsStruct);
-        // FIXME: We should try to claim the timestamp of each record
-        if (!tracker.tryClaim(0L)) {
-          return ProcessContinuation.stop();
+
+        for (ChangeStreamRecord record : records) {
+          // FIXME: We should process each type of record separately
+          final DataChangesRecord dataChangesRecord = (DataChangesRecord) record;
+          final long commitTimestamp = dataChangesRecord.getCommitTimestamp().toSqlTimestamp().getTime();
+          // FIXME: We should try to claim the timestamp of each record
+          if (!tracker.tryClaim(commitTimestamp)) {
+            return ProcessContinuation.stop();
+          }
+
+          LOG.info("Outputting record with timestamp " + commitTimestamp);
+          receiver.outputWithTimestamp(dataChangesRecord, new Instant(commitTimestamp));
         }
-        // FIXME: The timestamp should be the record timestamp
-        final Instant timestamp = Instant.now();
-        LOG.info("Outputting record with timestamp " + timestamp);
-        // FIXME: We should not only emit the first record
-        receiver.outputWithTimestamp((DataChangesRecord) records.get(0), timestamp);
       }
 
+      // FIXME: This should be removed once we have our custom tracker
+      tracker.tryClaim(element.getEndTimestamp().toSqlTimestamp().getTime());
       return ProcessContinuation.stop();
     }
   }
