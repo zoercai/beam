@@ -21,8 +21,9 @@ import com.google.cloud.spanner.Type;
 import com.google.cloud.spanner.Type.StructField;
 import com.google.cloud.spanner.Value;
 import com.google.gson.Gson;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.stream.Collectors;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
@@ -76,16 +77,22 @@ public class TestStructMapper {
     this.gson = new Gson();
   }
 
-  public Struct toStruct(DataChangesRecord record) {
+  public Struct toStruct(ChangeStreamRecord... records) {
     return Struct
         .newBuilder()
         .add(Value.structArray(
             STREAM_RECORD_TYPE,
-            Collections.singletonList(
-                streamRecordStructFrom(record)
-            )
+            Arrays.stream(records).map(this::streamRecordStructFrom).collect(Collectors.toList())
         ))
         .build();
+  }
+
+  private Struct streamRecordStructFrom(ChangeStreamRecord record) {
+    if (record instanceof DataChangesRecord) {
+      return streamRecordStructFrom((DataChangesRecord) record);
+    } else {
+      throw new UnsupportedOperationException("Unimplemented mapping for " + record.getClass());
+    }
   }
 
   private Struct streamRecordStructFrom(DataChangesRecord record) {

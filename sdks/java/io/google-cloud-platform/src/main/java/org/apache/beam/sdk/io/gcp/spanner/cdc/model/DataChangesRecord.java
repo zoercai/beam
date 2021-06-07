@@ -18,7 +18,6 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.model;
 
 import com.google.cloud.Timestamp;
-import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
 import org.apache.avro.reflect.AvroEncode;
@@ -27,7 +26,7 @@ import org.apache.beam.sdk.coders.DefaultCoder;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.TimestampEncoding;
 
 @DefaultCoder(AvroCoder.class)
-public class DataChangesRecord implements Serializable {
+public class DataChangesRecord implements ChangeStreamRecord {
 
   private static final long serialVersionUID = 1138762498767540898L;
 

@@ -20,10 +20,13 @@ import com.google.cloud.spanner.DatabaseClient;
 import com.google.cloud.spanner.ResultSet;
 import com.google.cloud.spanner.Statement;
 import com.google.cloud.spanner.Struct;
+import com.google.gson.Gson;
 import java.io.Serializable;
+import java.util.List;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerAccessor;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.RecordMapper;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.ChangeStreamRecordMapper;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
 import org.apache.beam.sdk.io.range.OffsetRange;
@@ -41,10 +44,9 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private static final long serialVersionUID = -7574596218085711975L;
   private static final Logger LOG = LoggerFactory.getLogger(ReadChangeStreamPartitionDoFn.class);
 
-  private SpannerConfig spannerConfig;
-
-  // TODO: Check if this is really necessary
-  private ReadChangeStreamPartitionDoFn() {}
+  private final SpannerConfig spannerConfig;
+  private transient DatabaseClient databaseClient;
+  private transient ChangeStreamRecordMapper changeStreamRecordMapper;
 
   public ReadChangeStreamPartitionDoFn(SpannerConfig spannerConfig) {
     this.spannerConfig = spannerConfig;
@@ -55,37 +57,36 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
     return new OffsetRange(0, 1);
   }
 
+  @Setup
+  public void setup() {
+    final SpannerAccessor spannerAccessor = SpannerAccessor.getOrCreate(spannerConfig);
+    this.databaseClient = spannerAccessor.getDatabaseClient();
+    this.changeStreamRecordMapper = new ChangeStreamRecordMapper(new Gson());
+  }
+
   @ProcessElement
   public ProcessContinuation processElement(
       @Element PartitionMetadata element,
       RestrictionTracker<OffsetRange, Long> tracker,
       OutputReceiver<DataChangesRecord> receiver
   ) {
-    // FIXME: These variables should be moved from here
-    final SpannerAccessor spannerAccessor = SpannerAccessor.getOrCreate(spannerConfig);
-    final DatabaseClient databaseClient = spannerAccessor.getDatabaseClient();
-    final RecordMapper recordMapper = new RecordMapper();
     try (ResultSet resultSet = databaseClient.singleUse().executeQuery(Statement.of("SELECT 1"))) {
       while (resultSet.next()) {
-        // FIXME: We should not only get the first record
-        final Struct rowAsStruct = resultSet.getCurrentRowAsStruct().getStructList(0).get(0).getStruct("data_change_record");
-        final DataChangesRecord dataChangesRecord = recordMapper.toDataChangesRecord(element.getPartitionToken(), rowAsStruct);
+        final Struct rowAsStruct = resultSet.getCurrentRowAsStruct();
+        final List<ChangeStreamRecord> records = changeStreamRecordMapper
+            .toChangeStreamRecords(element.getPartitionToken(), rowAsStruct);
+        // FIXME: We should try to claim the timestamp of each record
         if (!tracker.tryClaim(0L)) {
           return ProcessContinuation.stop();
         }
         // FIXME: The timestamp should be the record timestamp
         final Instant timestamp = Instant.now();
         LOG.info("Outputting record with timestamp " + timestamp);
-        receiver.outputWithTimestamp(dataChangesRecord, timestamp);
+        // FIXME: We should not only emit the first record
+        receiver.outputWithTimestamp((DataChangesRecord) records.get(0), timestamp);
       }
 
-      // FIXME: This should be a resume
       return ProcessContinuation.stop();
     }
-  }
-
-  // TODO: Check if this is really necessary
-  public void setSpannerConfig(SpannerConfig spannerConfig) {
-    this.spannerConfig = spannerConfig;
   }
 }

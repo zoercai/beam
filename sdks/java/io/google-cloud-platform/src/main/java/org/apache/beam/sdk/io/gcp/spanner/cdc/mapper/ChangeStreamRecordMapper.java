@@ -18,8 +18,10 @@ package org.apache.beam.sdk.io.gcp.spanner.cdc.mapper;
 
 import com.google.cloud.spanner.Struct;
 import com.google.gson.Gson;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
@@ -28,15 +30,27 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.model.TypeCode;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ValueCaptureType;
 
 // TODO: Add unit tests
-public class RecordMapper {
+public class ChangeStreamRecordMapper {
 
   private final Gson gson;
 
-  public RecordMapper() {
-    this.gson = new Gson();
+  public ChangeStreamRecordMapper(Gson gson) {
+    this.gson = gson;
   }
 
-  public DataChangesRecord toDataChangesRecord(String partitionToken, Struct row) {
+  public List<ChangeStreamRecord> toChangeStreamRecords(String partitionToken, Struct row) {
+    return row
+        .getStructList(0)
+        .stream()
+        .map(struct -> toChangeStreamRecord(partitionToken, struct))
+        .collect(Collectors.toList());
+  }
+
+  private ChangeStreamRecord toChangeStreamRecord(String partitionToken, Struct row) {
+    return toDataChangesRecord(partitionToken, row.getStruct("data_change_record"));
+  }
+
+  private DataChangesRecord toDataChangesRecord(String partitionToken, Struct row) {
     return new DataChangesRecord(
         partitionToken,
         row.getTimestamp("commit_timestamp"),
