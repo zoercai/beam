@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
 
 // TODO: Check if this should be made static
@@ -86,9 +87,32 @@ public class TestStructMapper {
   private static Struct streamRecordStructFrom(ChangeStreamRecord record) {
     if (record instanceof DataChangesRecord) {
       return streamRecordStructFrom((DataChangesRecord) record);
+    } else if (record instanceof HeartbeatRecord) {
+      return streamRecordStructFrom((HeartbeatRecord) record);
     } else {
       throw new UnsupportedOperationException("Unimplemented mapping for " + record.getClass());
     }
+  }
+
+  private static Struct streamRecordStructFrom(HeartbeatRecord record) {
+    return Struct
+        .newBuilder()
+        .set("data_change_record")
+        .to(DATA_CHANGE_RECORD_TYPE, null)
+        .set("heartbeat_record")
+        .to(HEARTBEAT_RECORD_TYPE, recordStructFrom(record))
+        .set("child_partitions_record")
+        .to(CHILD_PARTITIONS_RECORD_TYPE, null)
+        .build();
+
+  }
+
+  private static Struct recordStructFrom(HeartbeatRecord record) {
+    return Struct
+        .newBuilder()
+        .set("timestamp")
+        .to(record.getTimestamp())
+        .build();
   }
 
   private static Struct streamRecordStructFrom(DataChangesRecord record) {

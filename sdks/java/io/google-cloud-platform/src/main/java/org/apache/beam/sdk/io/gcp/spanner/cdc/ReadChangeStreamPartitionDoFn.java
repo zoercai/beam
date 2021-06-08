@@ -16,7 +16,6 @@
 
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
-import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.DatabaseClient;
 import com.google.cloud.spanner.ResultSet;
 import com.google.cloud.spanner.Statement;
@@ -29,11 +28,14 @@ import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.ChangeStreamRecordMapper;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
 import org.apache.beam.sdk.io.range.OffsetRange;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.DoFn.UnboundedPerElement;
+import org.apache.beam.sdk.transforms.splittabledofn.ManualWatermarkEstimator;
 import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker;
+import org.apache.beam.sdk.transforms.splittabledofn.WatermarkEstimators.Manual;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,7 +73,8 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   public ProcessContinuation processElement(
       @Element PartitionMetadata element,
       RestrictionTracker<OffsetRange, Long> tracker,
-      OutputReceiver<DataChangesRecord> receiver
+      OutputReceiver<DataChangesRecord> receiver,
+      ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
     try (ResultSet resultSet = databaseClient.singleUse().executeQuery(Statement.of("SELECT 1"))) {
       while (resultSet.next()) {
@@ -81,15 +84,24 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
         for (ChangeStreamRecord record : records) {
           // FIXME: We should process each type of record separately
-          final DataChangesRecord dataChangesRecord = (DataChangesRecord) record;
-          final long commitTimestamp = dataChangesRecord.getCommitTimestamp().toSqlTimestamp().getTime();
-          // FIXME: We should try to claim the timestamp of each record
-          if (!tracker.tryClaim(commitTimestamp)) {
+          boolean isRecordClaimed = false;
+          if (record instanceof DataChangesRecord) {
+            isRecordClaimed = processDataChangesRecord(
+                (DataChangesRecord) record,
+                tracker,
+                receiver,
+                watermarkEstimator
+            );
+          } else if (record instanceof HeartbeatRecord) {
+            isRecordClaimed = processHeartbeatRecord(
+                (HeartbeatRecord) record,
+                tracker,
+                watermarkEstimator
+            );
+          }
+          if (!isRecordClaimed) {
             return ProcessContinuation.stop();
           }
-
-          LOG.info("Outputting record with timestamp " + commitTimestamp);
-          receiver.outputWithTimestamp(dataChangesRecord, new Instant(commitTimestamp));
         }
       }
 
@@ -97,5 +109,46 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       tracker.tryClaim(element.getEndTimestamp().toSqlTimestamp().getTime());
       return ProcessContinuation.stop();
     }
+  }
+
+  private boolean processDataChangesRecord(
+      DataChangesRecord record,
+      RestrictionTracker<OffsetRange, Long> tracker,
+      OutputReceiver<DataChangesRecord> receiver,
+      ManualWatermarkEstimator<Instant> watermarkEstimator) {
+    final long commitTimestamp = record.getCommitTimestamp().toSqlTimestamp().getTime();
+    if (!tracker.tryClaim(commitTimestamp)) {
+      return false;
+    }
+    receiver.output(record);
+    watermarkEstimator.setWatermark(new Instant(commitTimestamp));
+
+    return true;
+  }
+
+  private boolean processHeartbeatRecord(
+      HeartbeatRecord record,
+      RestrictionTracker<OffsetRange, Long> tracker,
+      ManualWatermarkEstimator<Instant> watermarkEstimator
+  ) {
+    final long timestamp = record.getTimestamp().toSqlTimestamp().getTime();
+    if (!tracker.tryClaim(timestamp)) {
+      return false;
+    }
+    watermarkEstimator.setWatermark(new Instant(timestamp));
+
+    return true;
+  }
+
+  @GetInitialWatermarkEstimatorState
+  public Instant getInitialWatermarkEstimatorState(@Timestamp Instant currentElementTimestamp) {
+    return currentElementTimestamp;
+  }
+
+  @NewWatermarkEstimator
+  public ManualWatermarkEstimator<Instant> newWatermarkEstimator(
+      @WatermarkEstimatorState Instant watermarkEstimatorState
+  ) {
+    return new Manual(watermarkEstimatorState);
   }
 }

@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ModType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.TypeCode;
@@ -47,7 +48,21 @@ public class ChangeStreamRecordMapper {
   }
 
   private ChangeStreamRecord toChangeStreamRecord(String partitionToken, Struct row) {
-    return toDataChangesRecord(partitionToken, row.getStruct("data_change_record"));
+    if (isDataChangesRecord(row)) {
+      return toDataChangesRecord(partitionToken, row.getStruct("data_change_record"));
+    } else if (isHeartbeatRecord(row)) {
+      return toHeartbeatRecord(row.getStruct("heartbeat_record"));
+    } else {
+      throw new IllegalArgumentException("Unknown record type for " + row);
+    }
+  }
+
+  private boolean isDataChangesRecord(Struct row) {
+    return !row.isNull("data_change_record");
+  }
+
+  private boolean isHeartbeatRecord(Struct row) {
+    return !row.isNull("heartbeat_record");
   }
 
   private DataChangesRecord toDataChangesRecord(String partitionToken, Struct row) {
@@ -63,6 +78,10 @@ public class ChangeStreamRecordMapper {
         ModType.valueOf(row.getString("mod_type")),
         ValueCaptureType.valueOf(row.getString("value_capture_type"))
     );
+  }
+
+  private HeartbeatRecord toHeartbeatRecord(Struct row) {
+    return new HeartbeatRecord(row.getTimestamp("timestamp"));
   }
 
   private ColumnType columnTypeFrom(Struct struct) {
@@ -81,4 +100,5 @@ public class ChangeStreamRecordMapper {
         newValues
     );
   }
+
 }

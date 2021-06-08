@@ -21,6 +21,7 @@ import org.apache.beam.sdk.io.gcp.spanner.SpannerAccessor;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ModType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
@@ -39,11 +40,15 @@ import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+// FIXME: We should assert on the restriction
+// FIXME: We should assert on the watermark
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(SpannerAccessor.class)
 public class ReadChangeStreamPartitionDoFnTest {
 
   private static final String PARTITION_TOKEN = "partitionToken";
+  private static final Timestamp PARTITION_START_TIMESTAMP = Timestamp.ofTimeSecondsAndNanos(10, 20);
+  private static final Timestamp PARTITION_END_TIMESTAMP = Timestamp.ofTimeSecondsAndNanos(30, 40);
 
   private DatabaseClient databaseClient;
   private ReadChangeStreamPartitionDoFn doFn;
@@ -69,9 +74,9 @@ public class ReadChangeStreamPartitionDoFnTest {
         .addElements(PartitionMetadata.newBuilder()
             .setPartitionToken(PARTITION_TOKEN)
             .setParentTokens(Collections.singletonList("parentToken"))
-            .setStartTimestamp(Timestamp.ofTimeSecondsAndNanos(10, 20))
+            .setStartTimestamp(PARTITION_START_TIMESTAMP)
             .setInclusiveStart(true)
-            .setEndTimestamp(Timestamp.ofTimeSecondsAndNanos(30, 40))
+            .setEndTimestamp(PARTITION_END_TIMESTAMP)
             .setInclusiveEnd(false)
             .setHeartbeatSeconds(30L)
             .setState(State.SCHEDULED)
@@ -98,7 +103,7 @@ public class ReadChangeStreamPartitionDoFnTest {
 
   @Test
   public void testDoFnProcessesDataRecords() {
-    final DataChangesRecord expectedRecord = new DataChangesRecord(
+    final DataChangesRecord record = new DataChangesRecord(
         PARTITION_TOKEN,
         Timestamp.ofTimeSecondsAndNanos(10, 20),
         "transactionId456",
@@ -118,20 +123,18 @@ public class ReadChangeStreamPartitionDoFnTest {
         ModType.UPDATE,
         ValueCaptureType.OLD_AND_NEW_VALUES
     );
-    final Struct expectedRecordAsStruct = recordsToStruct(expectedRecord);
+    final Struct recordAsStruct = recordsToStruct(record);
     final ResultSet resultSet = mock(ResultSet.class);
 
     when(databaseClient.singleUse().executeQuery(any(Statement.class))).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true, false);
-    when(resultSet.getCurrentRowAsStruct()).thenReturn(expectedRecordAsStruct);
+    when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
 
-    final PCollection<DataChangesRecord> records = pipeline
+    final PCollection<DataChangesRecord> result = pipeline
         .apply(testStream)
         .apply(ParDo.of(doFn));
 
-    // FIXME: We should assert on the restriction
-    // FIXME: We should assert on the watermark
-    PAssert.that(records).containsInAnyOrder(expectedRecord);
+    PAssert.that(result).containsInAnyOrder(record);
     pipeline.run();
   }
 
@@ -142,6 +145,25 @@ public class ReadChangeStreamPartitionDoFnTest {
   //   - Updates restriction
   //   - Updates watermark
   //   - Does NOT send to output stream
+  @Test
+  public void testDoFnProcessesHeartbeatRecords() {
+    final HeartbeatRecord heartbeatRecord = new HeartbeatRecord(
+        Timestamp.ofTimeSecondsAndNanos(20, 20));
+
+    final Struct recordAsStruct = recordsToStruct(heartbeatRecord);
+    final ResultSet resultSet = mock(ResultSet.class);
+
+    when(databaseClient.singleUse().executeQuery(any(Statement.class))).thenReturn(resultSet);
+    when(resultSet.next()).thenReturn(true, false);
+    when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
+
+    final PCollection<DataChangesRecord> result = pipeline
+        .apply(testStream)
+        .apply(ParDo.of(doFn));
+
+    PAssert.that(result).empty();
+    pipeline.run();
+  }
 
   // ChildPartitionRecord - Partition Split, Initial partition
   // PartitionMetadata record

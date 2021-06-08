@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ModType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.TypeCode;
@@ -57,6 +58,17 @@ public class ChangeStreamRecordMapperTest {
     );
   }
 
-  // TODO: Add test for heatbeat record
+  @Test
+  public void testMappingStructRowToHeartbeatRecord() {
+    final HeartbeatRecord heartbeatRecord = new HeartbeatRecord(
+        Timestamp.ofTimeSecondsAndNanos(10L, 20)
+    );
+    final Struct struct = recordsToStruct(heartbeatRecord);
+
+    assertEquals(
+        Collections.singletonList(heartbeatRecord),
+        mapper.toChangeStreamRecords("partitionToken", struct)
+    );
+  }
   // TODO: Add test for child partitions record
 }
