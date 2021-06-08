@@ -1413,10 +1413,14 @@ public class SpannerIO {
           getInclusiveStartAt(),
           getExclusiveEndAt());
 
+      // FIXME: This should come from the generated table name
+      final String tableName = "tableName";
+      final ReadChangeStreamPartitionDoFn readChangeStreamPartitionDoFn =
+          new ReadChangeStreamPartitionDoFn(getSpannerConfig(), tableName);
       return input
           .apply("Execute query", Create.of(1))
           .apply(ParDo.of(new DetectNewPartitions()))
-          .apply(ParDo.of(new ReadChangeStreamPartitionDoFn(getSpannerConfig())));
+          .apply(ParDo.of(readChangeStreamPartitionDoFn));
     }
   }
 
