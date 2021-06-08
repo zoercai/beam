@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildPartition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
@@ -30,7 +32,6 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ModType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.TypeCode;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ValueCaptureType;
 
-// TODO: Add unit tests
 public class ChangeStreamRecordMapper {
 
   private final Gson gson;
@@ -48,16 +49,18 @@ public class ChangeStreamRecordMapper {
   }
 
   private ChangeStreamRecord toChangeStreamRecord(String partitionToken, Struct row) {
-    if (isDataChangesRecord(row)) {
-      return toDataChangesRecord(partitionToken, row.getStruct("data_change_record"));
+    if (isDataChangeRecord(row)) {
+      return toDataChangeRecord(partitionToken, row.getStruct("data_change_record"));
     } else if (isHeartbeatRecord(row)) {
       return toHeartbeatRecord(row.getStruct("heartbeat_record"));
+    } else if (isChildPartitionRecord(row)) {
+      return toChildPartitionsRecord(row.getStruct("child_partitions_record"));
     } else {
       throw new IllegalArgumentException("Unknown record type for " + row);
     }
   }
 
-  private boolean isDataChangesRecord(Struct row) {
+  private boolean isDataChangeRecord(Struct row) {
     return !row.isNull("data_change_record");
   }
 
@@ -65,7 +68,11 @@ public class ChangeStreamRecordMapper {
     return !row.isNull("heartbeat_record");
   }
 
-  private DataChangesRecord toDataChangesRecord(String partitionToken, Struct row) {
+  private boolean isChildPartitionRecord(Struct row) {
+    return !row.isNull("child_partitions_record");
+  }
+
+  private DataChangesRecord toDataChangeRecord(String partitionToken, Struct row) {
     return new DataChangesRecord(
         partitionToken,
         row.getTimestamp("commit_timestamp"),
@@ -82,6 +89,14 @@ public class ChangeStreamRecordMapper {
 
   private HeartbeatRecord toHeartbeatRecord(Struct row) {
     return new HeartbeatRecord(row.getTimestamp("timestamp"));
+  }
+
+  private ChildPartitionsRecord toChildPartitionsRecord(Struct row) {
+    return new ChildPartitionsRecord(
+        row.getTimestamp("start_timestamp"),
+        row.getString("record_sequence"),
+        row.getStructList("child_partitions").stream().map(this::childPartitionFrom).collect(Collectors.toList())
+    );
   }
 
   private ColumnType columnTypeFrom(Struct struct) {
@@ -101,4 +116,10 @@ public class ChangeStreamRecordMapper {
     );
   }
 
+  private ChildPartition childPartitionFrom(Struct struct) {
+    return new ChildPartition(
+        struct.getString("token"),
+        struct.getStringList("parent_partition_tokens")
+    );
+  }
 }

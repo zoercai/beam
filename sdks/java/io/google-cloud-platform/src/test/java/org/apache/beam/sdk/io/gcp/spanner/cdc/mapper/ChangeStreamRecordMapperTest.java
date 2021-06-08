@@ -9,6 +9,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import java.util.Arrays;
 import java.util.Collections;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildPartition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
@@ -70,5 +72,25 @@ public class ChangeStreamRecordMapperTest {
         mapper.toChangeStreamRecords("partitionToken", struct)
     );
   }
-  // TODO: Add test for child partitions record
+
+  @Test
+  public void testMappingStructRowToChildPartitionRecord() {
+    final ChildPartitionsRecord childPartitionsRecord = new ChildPartitionsRecord(
+        Timestamp.ofTimeSecondsAndNanos(10L, 20),
+        "recordSequence",
+        Arrays.asList(
+            new ChildPartition("childToken1", Arrays.asList("parentToken1", "parentToken2")),
+            new ChildPartition("childToken2", Arrays.asList("parentToken1", "parentToken2"))
+        )
+    );
+    final Struct struct = recordsToStruct(childPartitionsRecord);
+
+    assertEquals(
+        Collections.singletonList(childPartitionsRecord),
+        mapper.toChangeStreamRecords("partitionToken", struct)
+    );
+  }
+
+  // TODO: Add test case for unknown record type
+  // TODO: Add test case for malformed record
 }

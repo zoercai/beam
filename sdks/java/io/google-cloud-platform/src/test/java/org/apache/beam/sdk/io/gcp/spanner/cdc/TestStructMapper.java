@@ -24,6 +24,8 @@ import com.google.gson.Gson;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildPartition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
@@ -32,13 +34,17 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
 // TODO: Check if this should be made static
 public class TestStructMapper {
 
-  public static final Type COLUMN_TYPE_TYPE = Type.struct(
+  private static final Type CHILD_PARTITION_TYPE = Type.struct(
+      StructField.of("token", Type.string()),
+      StructField.of("parent_partition_tokens", Type.array(Type.string()))
+  );
+  private static final Type COLUMN_TYPE_TYPE = Type.struct(
       StructField.of("name", Type.string()),
       StructField.of("type", Type.string()),
       StructField.of("is_primary_key", Type.bool()),
       StructField.of("ordinal_position", Type.int64())
   );
-  public static final Type MOD_TYPE = Type.struct(
+  private static final Type MOD_TYPE = Type.struct(
       StructField.of("keys", Type.string()),
       StructField.of("new_values", Type.string()),
       StructField.of("old_values", Type.string())
@@ -62,10 +68,7 @@ public class TestStructMapper {
   private static final Type CHILD_PARTITIONS_RECORD_TYPE = Type.struct(
       StructField.of("start_timestamp", Type.timestamp()),
       StructField.of("record_sequence", Type.string()),
-      StructField.of("child_partitions", Type.array(Type.struct(
-          StructField.of("token", Type.string()),
-          StructField.of("parent_partitions_token", Type.array(Type.string()))
-      )))
+      StructField.of("child_partitions", Type.array(CHILD_PARTITION_TYPE))
   );
   private static final Type STREAM_RECORD_TYPE = Type.struct(
       StructField.of("data_change_record", DATA_CHANGE_RECORD_TYPE),
@@ -89,9 +92,39 @@ public class TestStructMapper {
       return streamRecordStructFrom((DataChangesRecord) record);
     } else if (record instanceof HeartbeatRecord) {
       return streamRecordStructFrom((HeartbeatRecord) record);
+    } else if (record instanceof ChildPartitionsRecord) {
+      return streamRecordStructFrom((ChildPartitionsRecord) record);
     } else {
       throw new UnsupportedOperationException("Unimplemented mapping for " + record.getClass());
     }
+  }
+
+  private static Struct streamRecordStructFrom(ChildPartitionsRecord record) {
+    return Struct
+        .newBuilder()
+        .set("data_change_record")
+        .to(DATA_CHANGE_RECORD_TYPE, null)
+        .set("heartbeat_record")
+        .to(HEARTBEAT_RECORD_TYPE, null)
+        .set("child_partitions_record")
+        .to(CHILD_PARTITIONS_RECORD_TYPE, recordStructFrom(record))
+        .build();
+  }
+
+  private static Struct recordStructFrom(ChildPartitionsRecord record) {
+    final Value childPartitions = Value.structArray(
+        CHILD_PARTITION_TYPE,
+        record.getChildPartitions().stream().map(TestStructMapper::childPartitionFrom).collect(Collectors.toList())
+    );
+    return Struct
+        .newBuilder()
+        .set("start_timestamp")
+        .to(record.getStartTimestamp())
+        .set("record_sequence")
+        .to(record.getRecordSequence())
+        .set("child_partitions")
+        .to(childPartitions)
+        .build();
   }
 
   private static Struct streamRecordStructFrom(HeartbeatRecord record) {
@@ -104,7 +137,6 @@ public class TestStructMapper {
         .set("child_partitions_record")
         .to(CHILD_PARTITIONS_RECORD_TYPE, null)
         .build();
-
   }
 
   private static Struct recordStructFrom(HeartbeatRecord record) {
@@ -202,4 +234,13 @@ public class TestStructMapper {
         .build();
   }
 
+  private static Struct childPartitionFrom(ChildPartition childPartition) {
+    return Struct
+        .newBuilder()
+        .set("token")
+        .to(childPartition.getToken())
+        .set("parent_partition_tokens")
+        .to(Value.stringArray(childPartition.getParentTokens()))
+        .build();
+  }
 }

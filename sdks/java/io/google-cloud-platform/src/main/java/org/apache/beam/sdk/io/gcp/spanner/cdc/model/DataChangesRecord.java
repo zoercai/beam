@@ -25,6 +25,7 @@ import org.apache.beam.sdk.coders.AvroCoder;
 import org.apache.beam.sdk.coders.DefaultCoder;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.TimestampEncoding;
 
+// TODO: Check if we can remove the setters
 @DefaultCoder(AvroCoder.class)
 public class DataChangesRecord implements ChangeStreamRecord {
 

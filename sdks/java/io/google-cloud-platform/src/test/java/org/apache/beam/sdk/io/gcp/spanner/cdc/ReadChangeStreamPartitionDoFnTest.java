@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.withSettings;
 import static org.powermock.api.mockito.PowerMockito.mockStatic;
 
 import com.google.cloud.Timestamp;
@@ -19,6 +18,8 @@ import java.util.Collections;
 import org.apache.beam.sdk.coders.AvroCoder;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerAccessor;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildPartition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
@@ -149,7 +150,6 @@ public class ReadChangeStreamPartitionDoFnTest {
   public void testDoFnProcessesHeartbeatRecords() {
     final HeartbeatRecord heartbeatRecord = new HeartbeatRecord(
         Timestamp.ofTimeSecondsAndNanos(20, 20));
-
     final Struct recordAsStruct = recordsToStruct(heartbeatRecord);
     final ResultSet resultSet = mock(ResultSet.class);
 
@@ -176,6 +176,27 @@ public class ReadChangeStreamPartitionDoFnTest {
   //   - Waits for child partitions to start being read
   //   - Waits for parent partitions to be deleted (no parents will be available here)
   //   - Deletes the current partition from the metadata table
+  @Test
+  public void testDoFnProcessSplitChildPartitionRecords() {
+    final ChildPartitionsRecord record = new ChildPartitionsRecord(
+        Timestamp.ofTimeSecondsAndNanos(20L, 20),
+        "childRecordSequence",
+        Collections.singletonList(new ChildPartition("childToken", PARTITION_TOKEN))
+    );
+    final Struct recordAsStruct = recordsToStruct(record);
+    final ResultSet resultSet = mock(ResultSet.class);
+
+    when(databaseClient.singleUse().executeQuery(any(Statement.class))).thenReturn(resultSet);
+    when(resultSet.next()).thenReturn(true, false);
+    when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
+
+    final PCollection<DataChangesRecord> result = pipeline
+        .apply(testStream)
+        .apply(ParDo.of(doFn));
+
+    PAssert.that(result).empty();
+    pipeline.run();
+  }
 
   // ChildPartitionRecord - Partition Split
   // PartitionMetadata record

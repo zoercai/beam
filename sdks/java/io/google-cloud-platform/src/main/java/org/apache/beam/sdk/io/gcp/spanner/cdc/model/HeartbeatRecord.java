@@ -18,13 +18,29 @@ package org.apache.beam.sdk.io.gcp.spanner.cdc.model;
 
 import com.google.cloud.Timestamp;
 import java.util.Objects;
+import org.apache.avro.reflect.AvroEncode;
+import org.apache.beam.sdk.coders.AvroCoder;
+import org.apache.beam.sdk.coders.DefaultCoder;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.TimestampEncoding;
 
+// TODO: Check if we can remove the setters
+@DefaultCoder(AvroCoder.class)
 public class HeartbeatRecord implements ChangeStreamRecord {
 
   private static final long serialVersionUID = 5331450064150969956L;
-  private final Timestamp timestamp;
+  @AvroEncode(using = TimestampEncoding.class)
+  private Timestamp timestamp;
+
+  /**
+   * Default constructor for serialization only.
+   */
+  private HeartbeatRecord() {}
 
   public HeartbeatRecord(Timestamp timestamp) {
+    this.timestamp = timestamp;
+  }
+
+  public void setTimestamp(Timestamp timestamp) {
     this.timestamp = timestamp;
   }
 

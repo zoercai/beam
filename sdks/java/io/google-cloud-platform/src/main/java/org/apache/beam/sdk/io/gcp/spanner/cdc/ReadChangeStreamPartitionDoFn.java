@@ -27,6 +27,7 @@ import org.apache.beam.sdk.io.gcp.spanner.SpannerAccessor;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.ChangeStreamRecordMapper;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
@@ -76,6 +77,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       OutputReceiver<DataChangesRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
+    // TODO: Add the real change stream query here
     try (ResultSet resultSet = databaseClient.singleUse().executeQuery(Statement.of("SELECT 1"))) {
       while (resultSet.next()) {
         final Struct rowAsStruct = resultSet.getCurrentRowAsStruct();
@@ -83,7 +85,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
             .toChangeStreamRecords(element.getPartitionToken(), rowAsStruct);
 
         for (ChangeStreamRecord record : records) {
-          // FIXME: We should process each type of record separately
+          // FIXME: We should error if the record is of an unknown type
           boolean isRecordClaimed = false;
           if (record instanceof DataChangesRecord) {
             isRecordClaimed = processDataChangesRecord(
@@ -98,6 +100,12 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
                 tracker,
                 watermarkEstimator
             );
+          } else if (record instanceof ChildPartitionsRecord) {
+            isRecordClaimed = processChildPartitionsRecord(
+                (ChildPartitionsRecord) record,
+                tracker,
+                watermarkEstimator
+            );
           }
           if (!isRecordClaimed) {
             return ProcessContinuation.stop();
@@ -109,6 +117,18 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       tracker.tryClaim(element.getEndTimestamp().toSqlTimestamp().getTime());
       return ProcessContinuation.stop();
     }
+  }
+
+  @GetInitialWatermarkEstimatorState
+  public Instant getInitialWatermarkEstimatorState(@Timestamp Instant currentElementTimestamp) {
+    return currentElementTimestamp;
+  }
+
+  @NewWatermarkEstimator
+  public ManualWatermarkEstimator<Instant> newWatermarkEstimator(
+      @WatermarkEstimatorState Instant watermarkEstimatorState
+  ) {
+    return new Manual(watermarkEstimatorState);
   }
 
   private boolean processDataChangesRecord(
@@ -140,15 +160,21 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
     return true;
   }
 
-  @GetInitialWatermarkEstimatorState
-  public Instant getInitialWatermarkEstimatorState(@Timestamp Instant currentElementTimestamp) {
-    return currentElementTimestamp;
-  }
-
-  @NewWatermarkEstimator
-  public ManualWatermarkEstimator<Instant> newWatermarkEstimator(
-      @WatermarkEstimatorState Instant watermarkEstimatorState
+  // TODO: Update metadata table
+  // TODO: Wait for child partitions to be scheduled
+  // TODO: Wait for parent partitions to be deleted
+  // TODO: Delete the current partition from the partitions metadata table
+  private boolean processChildPartitionsRecord(
+      ChildPartitionsRecord record,
+      RestrictionTracker<OffsetRange, Long> tracker,
+      ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
-    return new Manual(watermarkEstimatorState);
+    final long startTimestamp = record.getStartTimestamp().toSqlTimestamp().getTime();
+    if (!tracker.tryClaim(startTimestamp)) {
+      return false;
+    }
+    watermarkEstimator.setWatermark(new Instant(startTimestamp));
+
+    return true;
   }
 }
