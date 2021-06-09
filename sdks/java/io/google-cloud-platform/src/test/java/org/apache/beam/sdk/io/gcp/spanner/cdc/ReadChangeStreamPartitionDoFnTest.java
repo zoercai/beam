@@ -3,9 +3,12 @@ package org.apache.beam.sdk.io.gcp.spanner.cdc;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.TestStructMapper.recordsToStruct;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.CREATED;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.FINISHED;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.SCHEDULED;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.powermock.api.mockito.PowerMockito.mockStatic;
@@ -17,7 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.function.Function;
-import org.apache.beam.sdk.coders.AvroCoder;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.DaoFactory;
@@ -31,16 +33,16 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ModType;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.TypeCode;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ValueCaptureType;
-import org.apache.beam.sdk.testing.PAssert;
-import org.apache.beam.sdk.testing.TestPipeline;
-import org.apache.beam.sdk.testing.TestStream;
-import org.apache.beam.sdk.transforms.ParDo;
-import org.apache.beam.sdk.values.PCollection;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionPosition;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestriction;
+import org.apache.beam.sdk.transforms.DoFn.OutputReceiver;
+import org.apache.beam.sdk.transforms.DoFn.ProcessContinuation;
+import org.apache.beam.sdk.transforms.splittabledofn.ManualWatermarkEstimator;
+import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker;
+import org.joda.time.Instant;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.invocation.InvocationOnMock;
@@ -62,10 +64,10 @@ public class ReadChangeStreamPartitionDoFnTest {
   private PartitionMetadataDao partitionMetadataDao;
   private ChangeStreamDao changeStreamDao;
   private ReadChangeStreamPartitionDoFn doFn;
-  private TestStream<PartitionMetadata> testStream;
-
-  @Rule
-  public TestPipeline pipeline = TestPipeline.create();
+  private PartitionMetadata element;
+  private RestrictionTracker<PartitionRestriction, PartitionPosition> restrictionTracker;
+  private OutputReceiver<DataChangesRecord> outputReceiver;
+  private ManualWatermarkEstimator<Instant> watermarkEstimator;
 
   @Before
   public void setUp() {
@@ -79,25 +81,23 @@ public class ReadChangeStreamPartitionDoFnTest {
     partitionMetadataDao = mock(PartitionMetadataDao.class);
     changeStreamDao = mock(ChangeStreamDao.class);
     doFn = new ReadChangeStreamPartitionDoFn(spannerConfig, "table-id");
-    testStream = TestStream
-        .create(AvroCoder.of(PartitionMetadata.class))
-        .addElements(PartitionMetadata.newBuilder()
-            .setPartitionToken(PARTITION_TOKEN)
-            .setParentTokens(Collections.singletonList("parentToken"))
-            .setStartTimestamp(PARTITION_START_TIMESTAMP)
-            .setInclusiveStart(true)
-            .setEndTimestamp(PARTITION_END_TIMESTAMP)
-            .setInclusiveEnd(false)
-            .setHeartbeatSeconds(PARTITION_HEARTBEAT_SECONDS)
-            .setState(State.SCHEDULED)
-            .setCreatedAt(Timestamp.MAX_VALUE)
-            .setUpdatedAt(Timestamp.MAX_VALUE)
-            .build()
-        )
-        .advanceWatermarkToInfinity();
+    element = PartitionMetadata.newBuilder()
+        .setPartitionToken(PARTITION_TOKEN)
+        .setParentTokens(Collections.singletonList("parentToken"))
+        .setStartTimestamp(PARTITION_START_TIMESTAMP)
+        .setInclusiveStart(true)
+        .setEndTimestamp(PARTITION_END_TIMESTAMP)
+        .setInclusiveEnd(false)
+        .setHeartbeatSeconds(PARTITION_HEARTBEAT_SECONDS)
+        .setState(SCHEDULED)
+        .build();
+    restrictionTracker = mock(RestrictionTracker.class);
+    outputReceiver = mock(OutputReceiver.class);
+    watermarkEstimator = mock(ManualWatermarkEstimator.class);
 
     when(DaoFactory.partitionMetadataDaoFrom(spannerConfig)).thenReturn(partitionMetadataDao);
     when(DaoFactory.changeStreamDaoFrom(spannerConfig)).thenReturn(changeStreamDao);
+    doFn.setup();
   }
 
   // --------------------------
@@ -139,13 +139,17 @@ public class ReadChangeStreamPartitionDoFnTest {
     when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
+    when(restrictionTracker.tryClaim(PartitionPosition.continueQuery(record.getCommitTimestamp()))).thenReturn(true);
 
-    final PCollection<DataChangesRecord> result = pipeline
-        .apply(testStream)
-        .apply(ParDo.of(doFn));
+    final ProcessContinuation result = doFn.processElement(
+        element,
+        restrictionTracker,
+        outputReceiver,
+        watermarkEstimator
+    );
 
-    PAssert.that(result).containsInAnyOrder(record);
-    pipeline.run();
+    assertEquals(result, ProcessContinuation.stop());
+    verify(outputReceiver).output(record);
   }
 
   // HeartbeatRecord
@@ -157,21 +161,24 @@ public class ReadChangeStreamPartitionDoFnTest {
   //   - Does NOT send to output stream
   @Test
   public void testDoFnProcessesHeartbeatRecords() {
-    final HeartbeatRecord heartbeatRecord = new HeartbeatRecord(
-        Timestamp.ofTimeSecondsAndNanos(20, 20));
-    final Struct recordAsStruct = recordsToStruct(heartbeatRecord);
+    final HeartbeatRecord record = new HeartbeatRecord(Timestamp.ofTimeSecondsAndNanos(20, 20));
+    final Struct recordAsStruct = recordsToStruct(record);
     final ResultSet resultSet = mock(ResultSet.class);
 
     when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
+    when(restrictionTracker.tryClaim(PartitionPosition.continueQuery(record.getTimestamp()))).thenReturn(true);
 
-    final PCollection<DataChangesRecord> result = pipeline
-        .apply(testStream)
-        .apply(ParDo.of(doFn));
+    final ProcessContinuation result = doFn.processElement(
+        element,
+        restrictionTracker,
+        outputReceiver,
+        watermarkEstimator
+    );
 
-    PAssert.that(result).empty();
-    pipeline.run();
+    assertEquals(result, ProcessContinuation.stop());
+    verify(outputReceiver, never()).output(any(DataChangesRecord.class));
   }
 
   // ChildPartitionRecord - Partition Split, Initial partition
@@ -200,14 +207,17 @@ public class ReadChangeStreamPartitionDoFnTest {
     when(partitionMetadataDao.runInTransaction(anyString(), any(Function.class))).thenAnswer(new TestTransactionAnswer(transaction));
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
+    when(restrictionTracker.tryClaim(PartitionPosition.continueQuery(record.getStartTimestamp()))).thenReturn(true);
 
-    final PCollection<DataChangesRecord> result = pipeline
-        .apply(testStream)
-        .apply(ParDo.of(doFn));
+    final ProcessContinuation result = doFn.processElement(
+        element,
+        restrictionTracker,
+        outputReceiver,
+        watermarkEstimator
+    );
 
-    PAssert.that(result).empty();
-    pipeline.run();
-
+    assertEquals(result, ProcessContinuation.stop());
+    verify(outputReceiver, never()).output(any(DataChangesRecord.class));
     verify(transaction).insert(Collections.singletonList(PartitionMetadata.newBuilder()
         .setPartitionToken("childToken")
         .setParentTokens(Collections.singletonList(PARTITION_TOKEN))
