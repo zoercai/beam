@@ -1,27 +1,28 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.TestStructMapper.recordsToStruct;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.CREATED;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.FINISHED;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.powermock.api.mockito.PowerMockito.mockStatic;
 
 import com.google.cloud.Timestamp;
-import com.google.cloud.spanner.DatabaseClient;
-import com.google.cloud.spanner.Mutation;
 import com.google.cloud.spanner.ResultSet;
-import com.google.cloud.spanner.Statement;
 import com.google.cloud.spanner.Struct;
-import com.google.cloud.spanner.TransactionContext;
 import com.google.common.collect.ImmutableMap;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.function.Function;
 import org.apache.beam.sdk.coders.AvroCoder;
-import org.apache.beam.sdk.io.gcp.spanner.SpannerAccessor;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamDao;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.DaoFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao.InTransactionContext;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildPartition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
@@ -42,13 +43,15 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 // FIXME: We should assert on the restriction
 // FIXME: We should assert on the watermark
 @RunWith(PowerMockRunner.class)
-@PrepareForTest(SpannerAccessor.class)
+@PrepareForTest(DaoFactory.class)
 public class ReadChangeStreamPartitionDoFnTest {
 
   private static final String PARTITION_TOKEN = "partitionToken";
@@ -56,8 +59,8 @@ public class ReadChangeStreamPartitionDoFnTest {
   private static final Timestamp PARTITION_END_TIMESTAMP = Timestamp.ofTimeSecondsAndNanos(30, 40);
   public static final long PARTITION_HEARTBEAT_SECONDS = 30L;
 
-  private String partitionMetadataTableName;
-  private DatabaseClient databaseClient;
+  private PartitionMetadataDao partitionMetadataDao;
+  private ChangeStreamDao changeStreamDao;
   private ReadChangeStreamPartitionDoFn doFn;
   private TestStream<PartitionMetadata> testStream;
 
@@ -71,12 +74,11 @@ public class ReadChangeStreamPartitionDoFnTest {
         .withProjectId("project-id")
         .withInstanceId("instance-id")
         .withDatabaseId("database-id");
-    final SpannerAccessor spannerAccessor = mock(SpannerAccessor.class);
-    mockStatic(SpannerAccessor.class);
+    mockStatic(DaoFactory.class);
 
-    partitionMetadataTableName = "table-id";
-    databaseClient = mock(DatabaseClient.class, RETURNS_DEEP_STUBS);
-    doFn = new ReadChangeStreamPartitionDoFn(spannerConfig, partitionMetadataTableName);
+    partitionMetadataDao = mock(PartitionMetadataDao.class);
+    changeStreamDao = mock(ChangeStreamDao.class);
+    doFn = new ReadChangeStreamPartitionDoFn(spannerConfig, "table-id");
     testStream = TestStream
         .create(AvroCoder.of(PartitionMetadata.class))
         .addElements(PartitionMetadata.newBuilder()
@@ -94,8 +96,8 @@ public class ReadChangeStreamPartitionDoFnTest {
         )
         .advanceWatermarkToInfinity();
 
-    when(SpannerAccessor.getOrCreate(spannerConfig)).thenReturn(spannerAccessor);
-    when(spannerAccessor.getDatabaseClient()).thenReturn(databaseClient);
+    when(DaoFactory.partitionMetadataDaoFrom(spannerConfig)).thenReturn(partitionMetadataDao);
+    when(DaoFactory.changeStreamDaoFrom(spannerConfig)).thenReturn(changeStreamDao);
   }
 
   // --------------------------
@@ -134,7 +136,7 @@ public class ReadChangeStreamPartitionDoFnTest {
     final Struct recordAsStruct = recordsToStruct(record);
     final ResultSet resultSet = mock(ResultSet.class);
 
-    when(databaseClient.singleUse().executeQuery(any(Statement.class))).thenReturn(resultSet);
+    when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
 
@@ -160,7 +162,7 @@ public class ReadChangeStreamPartitionDoFnTest {
     final Struct recordAsStruct = recordsToStruct(heartbeatRecord);
     final ResultSet resultSet = mock(ResultSet.class);
 
-    when(databaseClient.singleUse().executeQuery(any(Statement.class))).thenReturn(resultSet);
+    when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
 
@@ -192,11 +194,10 @@ public class ReadChangeStreamPartitionDoFnTest {
     );
     final Struct recordAsStruct = recordsToStruct(record);
     final ResultSet resultSet = mock(ResultSet.class);
-    final TransactionContext transaction = mock(TransactionContext.class);
-    final TransactionRunnerStub transactionRunner = new TransactionRunnerStub(transaction);
+    final InTransactionContext transaction = mock(InTransactionContext.class);
 
-    when(databaseClient.singleUse().executeQuery(any(Statement.class))).thenReturn(resultSet);
-    when(databaseClient.readWriteTransaction()).thenReturn(transactionRunner);
+    when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
+    when(partitionMetadataDao.runInTransaction(anyString(), any(Function.class))).thenAnswer(new TestTransactionAnswer(transaction));
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
 
@@ -207,35 +208,18 @@ public class ReadChangeStreamPartitionDoFnTest {
     PAssert.that(result).empty();
     pipeline.run();
 
-    verify(transaction).buffer(Arrays.asList(
-        Mutation
-            .newInsertBuilder(partitionMetadataTableName)
-            .set(PartitionMetadataDao.COLUMN_PARTITION_TOKEN)
-            .to("childToken")
-            // FIXME: This should be a list of parents
-            .set(PartitionMetadataDao.COLUMN_PARENT_TOKEN)
-            .to(PARTITION_TOKEN)
-            .set(PartitionMetadataDao.COLUMN_START_TIMESTAMP)
-            .to(Timestamp.ofTimeSecondsAndNanos(20L, 20))
-            .set(PartitionMetadataDao.COLUMN_INCLUSIVE_START)
-            .to(true)
-            .set(PartitionMetadataDao.COLUMN_END_TIMESTAMP)
-            .to(PARTITION_END_TIMESTAMP)
-            .set(PartitionMetadataDao.COLUMN_INCLUSIVE_END)
-            .to(false)
-            .set(PartitionMetadataDao.COLUMN_HEARTBEAT_SECONDS)
-            .to(PARTITION_HEARTBEAT_SECONDS)
-            .set(PartitionMetadataDao.COLUMN_STATE)
-            .to(PartitionMetadata.State.CREATED.toString())
-            .build(),
-        Mutation
-            .newUpdateBuilder(partitionMetadataTableName)
-            .set(PartitionMetadataDao.COLUMN_PARTITION_TOKEN)
-            .to(PARTITION_TOKEN)
-            .set(PartitionMetadataDao.COLUMN_STATE)
-            .to(PartitionMetadata.State.FINISHED.toString())
-            .build()
+    verify(transaction).insert(Collections.singletonList(PartitionMetadata.newBuilder()
+        .setPartitionToken("childToken")
+        .setParentTokens(Collections.singletonList(PARTITION_TOKEN))
+        .setStartTimestamp(Timestamp.ofTimeSecondsAndNanos(20L, 20))
+        .setInclusiveStart(true)
+        .setEndTimestamp(PARTITION_END_TIMESTAMP)
+        .setInclusiveEnd(false)
+        .setHeartbeatSeconds(PARTITION_HEARTBEAT_SECONDS)
+        .setState(CREATED)
+        .build()
     ));
+    verify(transaction).updateState(PARTITION_TOKEN, FINISHED);
   }
 
   // ChildPartitionRecord - Partition Split
@@ -306,4 +290,18 @@ public class ReadChangeStreamPartitionDoFnTest {
   //   - No permissions for the metadata table
   // --------------------------
 
+  public static class TestTransactionAnswer implements Answer<Object> {
+
+    private final InTransactionContext transaction;
+
+    public TestTransactionAnswer(InTransactionContext transaction) {
+      this.transaction = transaction;
+    }
+
+    @Override
+    public Object answer(InvocationOnMock invocation) {
+      Function<InTransactionContext, Object> callable = invocation.getArgument(1);
+      return callable.apply(transaction);
+    }
+  }
 }

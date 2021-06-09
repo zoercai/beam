@@ -16,17 +16,18 @@
 
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
-import com.google.cloud.spanner.DatabaseClient;
-import com.google.cloud.spanner.Mutation;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.CREATED;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.FINISHED;
+
 import com.google.cloud.spanner.ResultSet;
-import com.google.cloud.spanner.Statement;
 import com.google.cloud.spanner.Struct;
 import com.google.gson.Gson;
 import java.io.Serializable;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.beam.sdk.io.gcp.spanner.SpannerAccessor;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamDao;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.DaoFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.ChangeStreamRecordMapper;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
@@ -56,8 +57,9 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
   private final SpannerConfig spannerConfig;
   private final String tableName;
-  private transient DatabaseClient databaseClient;
   private transient ChangeStreamRecordMapper changeStreamRecordMapper;
+  private transient ChangeStreamDao changeStreamDao;
+  private transient PartitionMetadataDao partitionMetadataDao;
 
   public ReadChangeStreamPartitionDoFn(SpannerConfig spannerConfig, String partitionMetadataTableName) {
     this.spannerConfig = spannerConfig;
@@ -89,8 +91,8 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
   @Setup
   public void setup() {
-    final SpannerAccessor spannerAccessor = SpannerAccessor.getOrCreate(spannerConfig);
-    this.databaseClient = spannerAccessor.getDatabaseClient();
+    this.partitionMetadataDao = DaoFactory.partitionMetadataDaoFrom(spannerConfig);
+    this.changeStreamDao = DaoFactory.changeStreamDaoFrom(spannerConfig);
     this.changeStreamRecordMapper = new ChangeStreamRecordMapper(new Gson());
   }
 
@@ -102,7 +104,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
     // TODO: Add the real change stream query here
-    try (ResultSet resultSet = databaseClient.singleUse().executeQuery(Statement.of("SELECT 1"))) {
+    try (ResultSet resultSet = changeStreamDao.changeStreamQuery()) {
       while (resultSet.next()) {
         final Struct rowAsStruct = resultSet.getCurrentRowAsStruct();
         final List<ChangeStreamRecord> records = changeStreamRecordMapper
@@ -110,29 +112,29 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
         for (ChangeStreamRecord record : records) {
           // FIXME: We should error if the record is of an unknown type
-          boolean isRecordClaimed = false;
+          boolean isClaimed = false;
           if (record instanceof DataChangesRecord) {
-            isRecordClaimed = processDataChangesRecord(
+            isClaimed = processDataChangesRecord(
                 (DataChangesRecord) record,
                 tracker,
                 receiver,
                 watermarkEstimator
             );
           } else if (record instanceof HeartbeatRecord) {
-            isRecordClaimed = processHeartbeatRecord(
+            isClaimed = processHeartbeatRecord(
                 (HeartbeatRecord) record,
                 tracker,
                 watermarkEstimator
             );
           } else if (record instanceof ChildPartitionsRecord) {
-            isRecordClaimed = processChildPartitionsRecord(
+            isClaimed = processChildPartitionsRecord(
                 (ChildPartitionsRecord) record,
                 element,
                 tracker,
                 watermarkEstimator
             );
           }
-          if (!isRecordClaimed) {
+          if (!isClaimed) {
             return ProcessContinuation.stop();
           }
         }
@@ -174,7 +176,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
   private boolean processChildPartitionsRecord(
       ChildPartitionsRecord record,
-      PartitionMetadata partitionMetadata,
+      PartitionMetadata currentPartition,
       RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
@@ -187,33 +189,12 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
     // FIXME: Use the DAO if possible
     // FIXME: We will need to batch the records here
     // FIXME: Figure out what to do if this throws an exception
-    databaseClient
-        .readWriteTransaction()
-        .run(transaction -> {
-          final List<Mutation> mutations = record
-              .getChildPartitions()
-              .stream()
-              .map(childPartition -> mutationFrom(
-                  record.getStartTimestamp(),
-                  partitionMetadata.getEndTimestamp(),
-                  partitionMetadata.getHeartbeatSeconds(),
-                  childPartition
-              ))
-              .collect(Collectors.toList());
-          mutations.add(Mutation
-              .newUpdateBuilder(tableName)
-              .set(PartitionMetadataDao.COLUMN_PARTITION_TOKEN)
-              .to(partitionMetadata.getPartitionToken())
-              .set(PartitionMetadataDao.COLUMN_STATE)
-              .to(PartitionMetadata.State.FINISHED.toString())
-              // FIXME: This should be the pending commit timestamp
-              // .set(PartitionMetadataDao.COLUMN_UPDATED_AT)
-              // .to(com.google.cloud.Timestamp.now())
-              .build());
-
-          transaction.buffer(mutations);
-          return null;
-        });
+    final List<PartitionMetadata> newChildPartitions = partitionMetadataRowsFrom(record, currentPartition);
+    partitionMetadataDao.runInTransaction(tableName, transaction -> {
+      transaction.insert(newChildPartitions);
+      transaction.updateState(currentPartition.getPartitionToken(), FINISHED);
+      return null;
+    });
 
     watermarkEstimator.setWatermark(new Instant(startTimestamp.toSqlTimestamp().getTime()));
 
@@ -226,37 +207,37 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
     return true;
   }
 
-  private Mutation mutationFrom(
+  private List<PartitionMetadata> partitionMetadataRowsFrom(
+      ChildPartitionsRecord record,
+      PartitionMetadata parentPartition) {
+    return record
+        .getChildPartitions()
+        .stream()
+        .map(childPartition -> toPartitionMetadata(
+            record.getStartTimestamp(),
+            parentPartition.getEndTimestamp(),
+            parentPartition.getHeartbeatSeconds(),
+            childPartition
+        ))
+        .collect(Collectors.toList());
+  }
+
+  private PartitionMetadata toPartitionMetadata(
       com.google.cloud.Timestamp startTimestamp,
       com.google.cloud.Timestamp endTimestamp,
       long heartbeatSeconds,
       ChildPartition childPartition
   ) {
-    return Mutation
-        .newInsertBuilder(tableName)
-        .set(PartitionMetadataDao.COLUMN_PARTITION_TOKEN)
-        .to(childPartition.getToken())
-        // FIXME: This should be a list of parents
-        .set(PartitionMetadataDao.COLUMN_PARENT_TOKEN)
-        .to(childPartition.getParentTokens().get(0))
-        .set(PartitionMetadataDao.COLUMN_START_TIMESTAMP)
-        .to(startTimestamp)
-        .set(PartitionMetadataDao.COLUMN_INCLUSIVE_START)
-        .to(true)
-        .set(PartitionMetadataDao.COLUMN_END_TIMESTAMP)
-        .to(endTimestamp)
-        .set(PartitionMetadataDao.COLUMN_INCLUSIVE_END)
-        .to(false)
-        .set(PartitionMetadataDao.COLUMN_HEARTBEAT_SECONDS)
-        .to(heartbeatSeconds)
-        .set(PartitionMetadataDao.COLUMN_STATE)
-        .to(PartitionMetadata.State.CREATED.toString())
-        // FIXME: This should be the pending commit timestamp
-        // .set(PartitionMetadataDao.COLUMN_CREATED_AT)
-        // .to(com.google.cloud.Timestamp.now())
-        // FIXME: This should be the pending commit timestamp
-        // .set(PartitionMetadataDao.COLUMN_UPDATED_AT)
-        // .to(com.google.cloud.Timestamp.now())
+    return PartitionMetadata
+        .newBuilder()
+        .setPartitionToken(childPartition.getToken())
+        .setParentTokens(childPartition.getParentTokens())
+        .setStartTimestamp(startTimestamp)
+        .setInclusiveStart(true)
+        .setEndTimestamp(endTimestamp)
+        .setInclusiveEnd(false)
+        .setHeartbeatSeconds(heartbeatSeconds)
+        .setState(CREATED)
         .build();
   }
 }
