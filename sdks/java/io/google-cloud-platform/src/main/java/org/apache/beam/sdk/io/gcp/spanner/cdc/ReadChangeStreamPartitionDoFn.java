@@ -35,7 +35,9 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildP
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
-import org.apache.beam.sdk.io.range.OffsetRange;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionPosition;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestriction;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestrictionTracker;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.DoFn.UnboundedPerElement;
 import org.apache.beam.sdk.transforms.splittabledofn.ManualWatermarkEstimator;
@@ -75,10 +77,14 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   }
 
   @GetInitialRestriction
-  public OffsetRange initialRestriction(@Element PartitionMetadata element) {
-    final long startTimestamp = element.getStartTimestamp().toSqlTimestamp().getTime();
-    final long endTimestamp = element.getEndTimestamp().toSqlTimestamp().getTime();
-    return new OffsetRange(startTimestamp, endTimestamp);
+  public PartitionRestriction initialRestriction(@Element PartitionMetadata element) {
+    return new PartitionRestriction(element.getStartTimestamp());
+  }
+
+  @NewTracker
+  public PartitionRestrictionTracker newTracker(
+      @Restriction PartitionRestriction restriction) {
+    return new PartitionRestrictionTracker(restriction);
   }
 
   @Setup
@@ -91,7 +97,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   @ProcessElement
   public ProcessContinuation processElement(
       @Element PartitionMetadata element,
-      RestrictionTracker<OffsetRange, Long> tracker,
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
       OutputReceiver<DataChangesRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
@@ -132,37 +138,36 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
         }
       }
 
-      // FIXME: This should be removed once we have our custom tracker
-      tracker.tryClaim(element.getEndTimestamp().toSqlTimestamp().getTime());
+      tracker.tryClaim(PartitionPosition.done());
       return ProcessContinuation.stop();
     }
   }
 
   private boolean processDataChangesRecord(
       DataChangesRecord record,
-      RestrictionTracker<OffsetRange, Long> tracker,
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
       OutputReceiver<DataChangesRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator) {
-    final long commitTimestamp = record.getCommitTimestamp().toSqlTimestamp().getTime();
-    if (!tracker.tryClaim(commitTimestamp)) {
+    final com.google.cloud.Timestamp commitTimestamp = record.getCommitTimestamp();
+    if (!tracker.tryClaim(PartitionPosition.continueQuery(commitTimestamp))) {
       return false;
     }
     receiver.output(record);
-    watermarkEstimator.setWatermark(new Instant(commitTimestamp));
+    watermarkEstimator.setWatermark(new Instant(commitTimestamp.toSqlTimestamp().getTime()));
 
     return true;
   }
 
   private boolean processHeartbeatRecord(
       HeartbeatRecord record,
-      RestrictionTracker<OffsetRange, Long> tracker,
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
-    final long timestamp = record.getTimestamp().toSqlTimestamp().getTime();
-    if (!tracker.tryClaim(timestamp)) {
+    final com.google.cloud.Timestamp timestamp = record.getTimestamp();
+    if (!tracker.tryClaim(PartitionPosition.continueQuery(timestamp))) {
       return false;
     }
-    watermarkEstimator.setWatermark(new Instant(timestamp));
+    watermarkEstimator.setWatermark(new Instant(timestamp.toSqlTimestamp().getTime()));
 
     return true;
   }
@@ -170,11 +175,11 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private boolean processChildPartitionsRecord(
       ChildPartitionsRecord record,
       PartitionMetadata partitionMetadata,
-      RestrictionTracker<OffsetRange, Long> tracker,
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
-    final long startTimestamp = record.getStartTimestamp().toSqlTimestamp().getTime();
-    if (!tracker.tryClaim(startTimestamp)) {
+    final com.google.cloud.Timestamp startTimestamp = record.getStartTimestamp();
+    if (!tracker.tryClaim(PartitionPosition.continueQuery(startTimestamp))) {
       return false;
     }
 
@@ -210,10 +215,12 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
           return null;
         });
 
-    watermarkEstimator.setWatermark(new Instant(startTimestamp));
+    watermarkEstimator.setWatermark(new Instant(startTimestamp.toSqlTimestamp().getTime()));
 
     // TODO: Wait for child partitions to be scheduled
+    // tracker.tryClaim(PartitionPosition.waitForChildren(startTimestamp));
     // TODO: Wait for parent partitions to be deleted
+    // tracker.tryClaim(PartitionPosition.waitForParents(startTimestamp));
     // TODO: Delete the current partition from the partitions metadata table
 
     return true;
