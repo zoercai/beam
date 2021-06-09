@@ -110,7 +110,6 @@ public class ReadChangeStreamPartitionDoFnTest {
   //   - Updates restriction
   //   - Updates watermark
   //   - Sends to output stream
-
   @Test
   public void testDoFnProcessesDataRecords() {
     final DataChangesRecord record = new DataChangesRecord(
@@ -139,7 +138,7 @@ public class ReadChangeStreamPartitionDoFnTest {
     when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
-    when(restrictionTracker.tryClaim(PartitionPosition.continueQuery(record.getCommitTimestamp()))).thenReturn(true);
+    when(restrictionTracker.tryClaim(any(PartitionPosition.class))).thenReturn(true);
 
     final ProcessContinuation result = doFn.processElement(
         element,
@@ -149,7 +148,9 @@ public class ReadChangeStreamPartitionDoFnTest {
     );
 
     assertEquals(result, ProcessContinuation.stop());
+    verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getCommitTimestamp()));
     verify(outputReceiver).output(record);
+    verify(watermarkEstimator).setWatermark(new Instant(record.getCommitTimestamp().toSqlTimestamp().getTime()));
   }
 
   // HeartbeatRecord
@@ -168,7 +169,7 @@ public class ReadChangeStreamPartitionDoFnTest {
     when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
-    when(restrictionTracker.tryClaim(PartitionPosition.continueQuery(record.getTimestamp()))).thenReturn(true);
+    when(restrictionTracker.tryClaim(any(PartitionPosition.class))).thenReturn(true);
 
     final ProcessContinuation result = doFn.processElement(
         element,
@@ -178,7 +179,9 @@ public class ReadChangeStreamPartitionDoFnTest {
     );
 
     assertEquals(result, ProcessContinuation.stop());
+    verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getTimestamp()));
     verify(outputReceiver, never()).output(any(DataChangesRecord.class));
+    verify(watermarkEstimator).setWatermark(new Instant(record.getTimestamp().toSqlTimestamp().getTime()));
   }
 
   // ChildPartitionRecord - Partition Split, Initial partition
@@ -207,7 +210,7 @@ public class ReadChangeStreamPartitionDoFnTest {
     when(partitionMetadataDao.runInTransaction(anyString(), any(Function.class))).thenAnswer(new TestTransactionAnswer(transaction));
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
-    when(restrictionTracker.tryClaim(PartitionPosition.continueQuery(record.getStartTimestamp()))).thenReturn(true);
+    when(restrictionTracker.tryClaim(any(PartitionPosition.class))).thenReturn(true);
 
     final ProcessContinuation result = doFn.processElement(
         element,
@@ -217,7 +220,9 @@ public class ReadChangeStreamPartitionDoFnTest {
     );
 
     assertEquals(result, ProcessContinuation.stop());
+    verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getStartTimestamp()));
     verify(outputReceiver, never()).output(any(DataChangesRecord.class));
+    verify(watermarkEstimator).setWatermark(new Instant(record.getStartTimestamp().toSqlTimestamp().getTime()));
     verify(transaction).insert(Collections.singletonList(PartitionMetadata.newBuilder()
         .setPartitionToken("childToken")
         .setParentTokens(Collections.singletonList(PARTITION_TOKEN))
