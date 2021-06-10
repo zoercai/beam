@@ -43,6 +43,11 @@ public class PartitionMetadataDao {
     throw new UnsupportedOperationException("Unimplemented");
   }
 
+  // TODO: Implement
+  public void updateState(String partitionToken, PartitionMetadata.State state) {
+    throw new UnsupportedOperationException("Unimplemented");
+  }
+
   public <T> T runInTransaction(String tableName, Function<InTransactionContext, T> callable) {
     return databaseClient
         .readWriteTransaction()

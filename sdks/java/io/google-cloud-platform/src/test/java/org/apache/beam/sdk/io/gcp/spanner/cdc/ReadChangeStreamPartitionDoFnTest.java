@@ -66,6 +66,7 @@ public class ReadChangeStreamPartitionDoFnTest {
   private RestrictionTracker<PartitionRestriction, PartitionPosition> restrictionTracker;
   private OutputReceiver<DataChangesRecord> outputReceiver;
   private ManualWatermarkEstimator<Instant> watermarkEstimator;
+  private String tableName;
 
   @Before
   public void setUp() {
@@ -76,9 +77,10 @@ public class ReadChangeStreamPartitionDoFnTest {
         .withDatabaseId("database-id");
     mockStatic(DaoFactory.class);
 
+    tableName = "table-id";
     partitionMetadataDao = mock(PartitionMetadataDao.class);
     changeStreamDao = mock(ChangeStreamDao.class);
-    doFn = new ReadChangeStreamPartitionDoFn(spannerConfig, "table-id");
+    doFn = new ReadChangeStreamPartitionDoFn(spannerConfig, tableName);
     element = PartitionMetadata.newBuilder()
         .setPartitionToken(PARTITION_TOKEN)
         .setParentTokens(Collections.singletonList("parentToken"))
@@ -150,8 +152,13 @@ public class ReadChangeStreamPartitionDoFnTest {
 
     assertEquals(ProcessContinuation.stop(), result);
     verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getCommitTimestamp()));
+    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParents());
+    verify(restrictionTracker).tryClaim(PartitionPosition.deletePartition());
+    verify(restrictionTracker).tryClaim(PartitionPosition.done());
     verify(outputReceiver).output(record);
     verify(watermarkEstimator).setWatermark(new Instant(record.getCommitTimestamp().toSqlTimestamp().getTime()));
+    verify(partitionMetadataDao).updateState(PARTITION_TOKEN, FINISHED);
+    verify(partitionMetadataDao).delete(PARTITION_TOKEN);
   }
 
   // HeartbeatRecord
@@ -184,8 +191,13 @@ public class ReadChangeStreamPartitionDoFnTest {
 
     assertEquals(ProcessContinuation.stop(), result);
     verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getTimestamp()));
+    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParents());
+    verify(restrictionTracker).tryClaim(PartitionPosition.deletePartition());
+    verify(restrictionTracker).tryClaim(PartitionPosition.done());
     verify(outputReceiver, never()).output(any(DataChangesRecord.class));
     verify(watermarkEstimator).setWatermark(new Instant(record.getTimestamp().toSqlTimestamp().getTime()));
+    verify(partitionMetadataDao).updateState(PARTITION_TOKEN, FINISHED);
+    verify(partitionMetadataDao).delete(PARTITION_TOKEN);
   }
 
   // ChildPartitionRecord - Partition Split, Initial partition

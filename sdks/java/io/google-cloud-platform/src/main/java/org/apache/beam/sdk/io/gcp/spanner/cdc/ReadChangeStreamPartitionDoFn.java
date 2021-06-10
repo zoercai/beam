@@ -39,6 +39,7 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildP
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionPosition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestriction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestrictionTracker;
@@ -144,7 +145,28 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
         }
       }
 
-      // FIXME: On every case here we should wait for parent partitions and delete the current partition
+      // FIXME: There is double marking of a partition as finished for child partitions records here
+      // Marks the current partition as finished
+      partitionMetadataDao.updateState(element.getPartitionToken(), FINISHED);
+
+      // Waits for parent partitions to be deleted
+      if (!tracker.tryClaim(PartitionPosition.waitForParents())) {
+        return ProcessContinuation.stop();
+      }
+      long numberOfExistingParents = partitionMetadataDao.countExistingParents(
+          element.getPartitionToken()
+      );
+      if (numberOfExistingParents > 0) {
+        // TODO: Adjust this interval
+        return ProcessContinuation.resume().withResumeDelay(Duration.millis(100));
+      }
+
+      // Deletes current partition
+      if (!tracker.tryClaim(PartitionPosition.deletePartition())) {
+        return ProcessContinuation.stop();
+      }
+      partitionMetadataDao.delete(element.getPartitionToken());
+
       tracker.tryClaim(PartitionPosition.done());
       return ProcessContinuation.stop();
     }
@@ -214,26 +236,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       // TODO: Adjust this interval
       return Optional.of(ProcessContinuation.resume().withResumeDelay(Duration.millis(100)));
     }
-
-    // Waits for parent partitions to be deleted
-    // TODO: Wait for parent partitions to be deleted
-    if (!tracker.tryClaim(PartitionPosition.waitForParents())) {
-      return Optional.of(ProcessContinuation.stop());
-    }
-    long numberOfExistingParents = partitionMetadataDao.countExistingParents(
-        currentPartition.getPartitionToken()
-    );
-    if (numberOfExistingParents > 0) {
-      // TODO: Adjust this interval
-      return Optional.of(ProcessContinuation.resume().withResumeDelay(Duration.millis(100)));
-    }
-
-    // Deletes current partition
-    // TODO: Delete the current partition from the partitions metadata table
-    if (!tracker.tryClaim(PartitionPosition.deletePartition())) {
-      return Optional.of(ProcessContinuation.stop());
-    }
-    partitionMetadataDao.delete(currentPartition.getPartitionToken());
 
     return Optional.empty();
   }
