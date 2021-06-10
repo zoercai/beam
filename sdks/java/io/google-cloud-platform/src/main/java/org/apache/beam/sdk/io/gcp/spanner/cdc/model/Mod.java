@@ -102,7 +102,7 @@ public class Mod implements Serializable {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof Mod)) {
+    if (o == null || getClass() != o.getClass()) {
       return false;
     }
     Mod mod = (Mod) o;

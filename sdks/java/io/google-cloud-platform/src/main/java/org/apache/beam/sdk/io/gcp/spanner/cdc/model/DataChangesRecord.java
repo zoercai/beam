@@ -180,7 +180,7 @@ public class DataChangesRecord implements Serializable {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof DataChangesRecord)) {
+    if (o == null || getClass() != o.getClass()) {
       return false;
     }
     DataChangesRecord that = (DataChangesRecord) o;

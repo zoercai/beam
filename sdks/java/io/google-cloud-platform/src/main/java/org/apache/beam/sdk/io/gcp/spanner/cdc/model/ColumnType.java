@@ -86,7 +86,7 @@ public class ColumnType implements Serializable {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof ColumnType)) {
+    if (o == null || getClass() != o.getClass()) {
       return false;
     }
     ColumnType that = (ColumnType) o;
