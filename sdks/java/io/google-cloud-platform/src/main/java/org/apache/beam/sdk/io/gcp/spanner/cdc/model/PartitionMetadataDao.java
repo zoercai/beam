@@ -20,13 +20,15 @@ public class PartitionMetadataDao {
   public static final String COLUMN_UPDATED_AT = "UpdatedAt";
 
   private final DatabaseClient databaseClient;
+  private final String tableName;
 
-  public PartitionMetadataDao (DatabaseClient databaseClient) {
+  public PartitionMetadataDao (DatabaseClient databaseClient, String tableName) {
     this.databaseClient = databaseClient;
+    this.tableName = tableName;
   }
 
-  public Timestamp insert(String table, PartitionMetadata partitionMetadata) {
-    Mutation mutation = Mutation.newInsertBuilder(table)
+  public Timestamp insert(PartitionMetadata partitionMetadata) {
+    Mutation mutation = Mutation.newInsertBuilder(this.tableName)
         .set(COLUMN_PARTITION_TOKEN)
         .to(partitionMetadata.getPartitionToken())
         .set(COLUMN_PARENT_TOKEN)

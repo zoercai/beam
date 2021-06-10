@@ -37,7 +37,6 @@ import com.google.cloud.spanner.SpannerExceptionFactory;
 import com.google.common.collect.ImmutableList;
 import com.google.spanner.admin.database.v1.UpdateDatabaseDdlMetadata;
 import java.util.Collections;
-import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
@@ -51,21 +50,19 @@ public class PipelineInitializer {
   private static final long DEFAULT_HEARTBEAT_SECONDS = 1;
 
   public void initialize(DatabaseAdminClient databaseAdminClient,
-      PartitionMetadataDao partitionMetadataDao, DatabaseId id, Timestamp inclusiveStartAt,
+      PartitionMetadataDao partitionMetadataDao, DatabaseId id, String tableName, Timestamp inclusiveStartAt,
       @Nullable Timestamp exclusiveEndAt) {
-    createMetadataTable(databaseAdminClient, id);
-    createFakeParentPartition(partitionMetadataDao, id, inclusiveStartAt, exclusiveEndAt);
+    createMetadataTable(databaseAdminClient, id, tableName);
+    createFakeParentPartition(partitionMetadataDao, inclusiveStartAt, exclusiveEndAt);
   }
 
-  private void createMetadataTable(DatabaseAdminClient databaseAdminClient, DatabaseId id) {
+  private void createMetadataTable(DatabaseAdminClient databaseAdminClient, DatabaseId id,
+      String tableName) {
     final String metadataCreateStmt =
-        "CREATE TABLE CDC_Partitions_"
-            + id.getName()
-            + "_"
-            + UUID.randomUUID()
+        "CREATE TABLE CDC_Partitions_" + tableName
             + " ("
             + COLUMN_PARTITION_TOKEN + " STRING(MAX) NOT NULL,"
-            + COLUMN_PARENT_TOKEN + " STRING(MAX) NOT NULL,"
+            + COLUMN_PARENT_TOKEN + " ARRAY<STRING(MAX)> NOT NULL,"
             + COLUMN_START_TIMESTAMP + " TIMESTAMP NOT NULL,"
             + COLUMN_INCLUSIVE_START + " BOOL NOT NULL, "
             + COLUMN_END_TIMESTAMP + " TIMESTAMP,"
@@ -95,7 +92,7 @@ public class PipelineInitializer {
   }
 
   private void createFakeParentPartition(PartitionMetadataDao partitionMetadataDao,
-      DatabaseId id, Timestamp inclusiveStartAt, @Nullable Timestamp exclusiveEndAt) {
+      Timestamp inclusiveStartAt, @Nullable Timestamp exclusiveEndAt) {
     PartitionMetadata parentPartition = PartitionMetadata.newBuilder()
         .setPartitionToken(DEFAULT_PARENT_PARTITION_TOKEN)
         .setParentTokens(DEFAULT_PARENT_TOKENS)
@@ -104,6 +101,6 @@ public class PipelineInitializer {
         .setHeartbeatSeconds(DEFAULT_HEARTBEAT_SECONDS)
         .setState(State.CREATED)
         .build();
-    partitionMetadataDao.insert(id.getDatabase(), parentPartition);
+    partitionMetadataDao.insert(parentPartition);
   }
 }

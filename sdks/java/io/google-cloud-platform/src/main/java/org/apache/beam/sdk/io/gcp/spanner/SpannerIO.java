@@ -49,6 +49,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.apache.beam.sdk.annotations.Experimental;
 import org.apache.beam.sdk.annotations.Experimental.Kind;
@@ -1393,23 +1394,33 @@ public class SpannerIO {
           getSpannerConfig().getDatabaseId().get());
 
       // Start time must be within data retention period
-      // TODO: spanner dependency version is too old, need to be updated to see data retention period
+      Timestamp earliestVersionTime = databaseAdminClient
+          .getDatabase(getSpannerConfig().getInstanceId().get(),
+              getSpannerConfig().getDatabaseId().get()).getEarliestVersionTime();
+      checkArgument(
+          !getInclusiveStartAt().toSqlTimestamp().before(earliestVersionTime.toSqlTimestamp()));
 
       // Start time must be after change stream creation time
       checkArgument(!getInclusiveStartAt().toSqlTimestamp()
               .before(changeStreamsDb.getCreateTime().toSqlTimestamp()),
           "Start time must not be before the change stream creation time.");
 
-      PipelineInitializer pipelineInitializer = new PipelineInitializer();
-      PartitionMetadataDao partitionMetadataDao = new PartitionMetadataDao(databaseClient);
       DatabaseId databaseId = DatabaseId.of(
           getSpannerConfig().getProjectId().get(),
           getSpannerConfig().getInstanceId().get(),
           getSpannerConfig().getDatabaseId().get());
+      String partitionMetadataTableName = String
+          .format("CDC_Partitions_%s_%s", databaseId.getDatabase(), UUID.randomUUID())
+          .replaceAll("-", "_");
+
+      PipelineInitializer pipelineInitializer = new PipelineInitializer();
+      PartitionMetadataDao partitionMetadataDao = new PartitionMetadataDao(databaseClient,
+          partitionMetadataTableName);
       pipelineInitializer.initialize(
           databaseAdminClient,
           partitionMetadataDao,
           databaseId,
+          partitionMetadataTableName,
           getInclusiveStartAt(),
           getExclusiveEndAt());
 

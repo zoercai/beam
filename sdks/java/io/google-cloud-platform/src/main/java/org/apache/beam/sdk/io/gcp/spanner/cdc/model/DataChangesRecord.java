@@ -18,9 +18,9 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.model;
 
 import com.google.cloud.Timestamp;
+import com.google.common.base.Objects;
 import java.io.Serializable;
 import java.util.List;
-import java.util.Objects;
 import org.apache.avro.reflect.AvroEncode;
 import org.apache.beam.sdk.coders.AvroCoder;
 import org.apache.beam.sdk.coders.DefaultCoder;
@@ -42,11 +42,14 @@ public class DataChangesRecord implements Serializable {
   private List<Mod> mods;
   private ModType modType;
   private ValueCaptureType valueCaptureType;
+  private long numberOfRecordsInTransaction;
+  private long numberOfPartitionsInTransaction;
 
   /**
    * Default constructor for serialization only.
    */
-  private DataChangesRecord() {}
+  private DataChangesRecord() {
+  }
 
   public DataChangesRecord(
       String partitionToken,
@@ -58,7 +61,10 @@ public class DataChangesRecord implements Serializable {
       List<ColumnType> rowType,
       List<Mod> mods,
       ModType modType,
-      ValueCaptureType valueCaptureType) {
+      ValueCaptureType valueCaptureType,
+      long numberOfRecordsInTransaction,
+      long numberOfPartitionsInTransaction
+  ) {
     this.commitTimestamp = commitTimestamp;
     this.partitionToken = partitionToken;
     this.transactionId = transactionId;
@@ -69,6 +75,8 @@ public class DataChangesRecord implements Serializable {
     this.mods = mods;
     this.modType = modType;
     this.valueCaptureType = valueCaptureType;
+    this.numberOfRecordsInTransaction = numberOfRecordsInTransaction;
+    this.numberOfPartitionsInTransaction = numberOfPartitionsInTransaction;
   }
 
   public String getPartitionToken() {
@@ -151,39 +159,50 @@ public class DataChangesRecord implements Serializable {
     this.valueCaptureType = valueCaptureType;
   }
 
+  public long getNumberOfRecordsInTransaction() {
+    return numberOfRecordsInTransaction;
+  }
+
+  public void setNumberOfRecordsInTransaction(long numberOfRecordsInTransaction) {
+    this.numberOfRecordsInTransaction = numberOfRecordsInTransaction;
+  }
+
+  public long getNumberOfPartitionsInTransaction() {
+    return numberOfPartitionsInTransaction;
+  }
+
+  public void setNumberOfPartitionsInTransaction(long numberOfPartitionsInTransaction) {
+    this.numberOfPartitionsInTransaction = numberOfPartitionsInTransaction;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
       return true;
     }
-    if (o == null || getClass() != o.getClass()) {
+    if (!(o instanceof DataChangesRecord)) {
       return false;
     }
     DataChangesRecord that = (DataChangesRecord) o;
-    return isLastRecordInTransactionPartition == that.isLastRecordInTransactionPartition
-        && Objects.equals(commitTimestamp, that.commitTimestamp)
-        && Objects.equals(partitionToken, that.partitionToken)
-        && Objects.equals(transactionId, that.transactionId)
-        && Objects.equals(recordSequence, that.recordSequence)
-        && Objects.equals(tableName, that.tableName)
-        && Objects.equals(rowType, that.rowType)
-        && Objects.equals(mods, that.mods)
-        && modType == that.modType
-        && valueCaptureType == that.valueCaptureType;
+    return isLastRecordInTransactionPartition() == that.isLastRecordInTransactionPartition() &&
+        getNumberOfRecordsInTransaction() == that.getNumberOfRecordsInTransaction() &&
+        getNumberOfPartitionsInTransaction() == that.getNumberOfPartitionsInTransaction() &&
+        Objects.equal(getPartitionToken(), that.getPartitionToken()) &&
+        Objects.equal(getCommitTimestamp(), that.getCommitTimestamp()) &&
+        Objects.equal(getTransactionId(), that.getTransactionId()) &&
+        Objects.equal(getRecordSequence(), that.getRecordSequence()) &&
+        Objects.equal(getTableName(), that.getTableName()) &&
+        Objects.equal(getRowType(), that.getRowType()) &&
+        Objects.equal(getMods(), that.getMods()) &&
+        getModType() == that.getModType() &&
+        getValueCaptureType() == that.getValueCaptureType();
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(
-        commitTimestamp,
-        partitionToken,
-        transactionId,
-        isLastRecordInTransactionPartition,
-        recordSequence,
-        tableName,
-        rowType,
-        mods,
-        modType,
-        valueCaptureType);
+    return Objects.hashCode(getPartitionToken(), getCommitTimestamp(), getTransactionId(),
+        isLastRecordInTransactionPartition(), getRecordSequence(), getTableName(), getRowType(),
+        getMods(), getModType(), getValueCaptureType(), getNumberOfRecordsInTransaction(),
+        getNumberOfPartitionsInTransaction());
   }
 }
