@@ -1,14 +1,17 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DELETE_PARTITION;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DONE;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.PARTITION_QUERY;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_CHILDREN;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_PARENTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import com.google.cloud.Timestamp;
+import java.util.function.Consumer;
 import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker.IsBounded;
 import org.junit.Before;
 import org.junit.Test;
@@ -25,232 +28,51 @@ public class PartitionRestrictionTrackerTest {
     tracker = new PartitionRestrictionTracker(restriction);
   }
 
-  // tryClaim PARTITION_QUERY position
   @Test
-  public void testTryClaimPartitionQueryPositionFromNullPosition() {
-    final boolean isClaimed = tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        PARTITION_QUERY
-    ));
+  public void testTryClaimModeTransitions() {
+    final TryClaimTestScenario runner = new TryClaimTestScenario(
+        tracker, Timestamp.ofTimeSecondsAndNanos(10L, 20));
 
-    assertTrue(isClaimed);
-  }
+    runner.from(null).to(PARTITION_QUERY).assertSuccess();
+    runner.from(null).to(WAIT_FOR_CHILDREN).assertError();
+    runner.from(null).to(WAIT_FOR_PARENTS).assertError();
+    runner.from(null).to(DELETE_PARTITION).assertError();
+    runner.from(null).to(DONE).assertError();
 
-  @Test
-  public void testTryClaimPartitionQueryPositionFromPartitionQueryPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(PARTITION_QUERY);
+    runner.from(PARTITION_QUERY).to(PARTITION_QUERY).assertSuccess();
+    runner.from(PARTITION_QUERY).to(WAIT_FOR_CHILDREN).assertSuccess();
+    runner.from(PARTITION_QUERY).to(WAIT_FOR_PARENTS).assertError();
+    runner.from(PARTITION_QUERY).to(DELETE_PARTITION).assertSuccess();
+    runner.from(PARTITION_QUERY).to(DONE).assertError();
 
-    final boolean isClaimed = tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        PARTITION_QUERY
-    ));
+    runner.from(WAIT_FOR_CHILDREN).to(PARTITION_QUERY).assertError();
+    runner.from(WAIT_FOR_CHILDREN).to(WAIT_FOR_CHILDREN).assertError();
+    runner.from(WAIT_FOR_CHILDREN).to(WAIT_FOR_PARENTS).assertSuccess();
+    runner.from(WAIT_FOR_CHILDREN).to(DELETE_PARTITION).assertError();
+    runner.from(WAIT_FOR_CHILDREN).to(DONE).assertError();
 
-    assertTrue(isClaimed);
-  }
+    runner.from(WAIT_FOR_PARENTS).to(PARTITION_QUERY).assertError();
+    runner.from(WAIT_FOR_PARENTS).to(WAIT_FOR_CHILDREN).assertError();
+    runner.from(WAIT_FOR_PARENTS).to(WAIT_FOR_PARENTS).assertError();
+    runner.from(WAIT_FOR_PARENTS).to(DELETE_PARTITION).assertSuccess();
+    runner.from(WAIT_FOR_PARENTS).to(DONE).assertError();
 
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimPartitionQueryPositionFromWaitForChildrenPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(WAIT_FOR_CHILDREN);
+    runner.from(DELETE_PARTITION).to(PARTITION_QUERY).assertError();
+    runner.from(DELETE_PARTITION).to(WAIT_FOR_CHILDREN).assertError();
+    runner.from(DELETE_PARTITION).to(WAIT_FOR_PARENTS).assertError();
+    runner.from(DELETE_PARTITION).to(DELETE_PARTITION).assertError();
+    runner.from(DELETE_PARTITION).to(DONE).assertSuccess();
 
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        PARTITION_QUERY
-    ));
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimPartitionQueryPositionFromWaitForParentsPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(WAIT_FOR_PARENTS);
-
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        PARTITION_QUERY
-    ));
+    runner.from(DONE).to(PARTITION_QUERY).assertError();
+    runner.from(DONE).to(WAIT_FOR_CHILDREN).assertError();
+    runner.from(DONE).to(WAIT_FOR_PARENTS).assertError();
+    runner.from(DONE).to(DELETE_PARTITION).assertError();
+    runner.from(DONE).to(DONE).assertError();
   }
 
   @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimPartitionQueryPositionFromDonePosition() {
-    tracker.setLastClaimedTimestamp(Timestamp.MAX_VALUE);
-    tracker.setLastClaimedMode(DONE);
-
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        PARTITION_QUERY
-    ));
-  }
-
-  // tryClaim WAIT_FROM_CHILDREN position
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimWaitForChildrenPositionFromNullPosition() {
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        WAIT_FOR_CHILDREN
-    ));
-  }
-
-  @Test
-  public void testTryClaimWaitForChildrenPositionFromPartitionQueryPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(PARTITION_QUERY);
-
-    final boolean isClaimed = tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(20L, 30),
-        WAIT_FOR_CHILDREN
-    ));
-
-    assertTrue(isClaimed);
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimWaitForChildrenPositionFromWaitForChildrenPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(WAIT_FOR_CHILDREN);
-
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        WAIT_FOR_CHILDREN
-    ));
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimWaitForChildrenPositionFromWaitForParentsPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(WAIT_FOR_PARENTS);
-
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        WAIT_FOR_CHILDREN
-    ));
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimWaitForChildrenPositionFromDonePosition() {
-    tracker.setLastClaimedTimestamp(Timestamp.MAX_VALUE);
-    tracker.setLastClaimedMode(DONE);
-
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        WAIT_FOR_CHILDREN
-    ));
-  }
-
-  // tryClaim WAIT_FROM_PARENTS position
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimWaitForParentsPositionFromNullPosition() {
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        WAIT_FOR_PARENTS
-    ));
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimWaitForParentsPositionFromPartitionQueryPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(PARTITION_QUERY);
-
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        WAIT_FOR_PARENTS
-    ));
-  }
-
-  @Test
-  public void testTryClaimWaitForParentsPositionFromWaitForChildrenPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(WAIT_FOR_CHILDREN);
-
-    final boolean isClaimed = tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(20L, 30),
-        WAIT_FOR_PARENTS
-    ));
-
-    assertTrue(isClaimed);
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimWaitForParentsPositionFromWaitForParentsPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(WAIT_FOR_PARENTS);
-
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        WAIT_FOR_PARENTS
-    ));
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimWaitForParentsPositionFromDonePosition() {
-    tracker.setLastClaimedTimestamp(Timestamp.MAX_VALUE);
-    tracker.setLastClaimedMode(DONE);
-
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(10L, 20),
-        WAIT_FOR_PARENTS
-    ));
-  }
-
-  // tryClaim DONE position
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimDonePositionFromNullPosition() {
-    final boolean isClaimed = tracker.tryClaim(new PartitionPosition(
-        Timestamp.MAX_VALUE,
-        DONE
-    ));
-
-    assertTrue(isClaimed);
-  }
-
-  @Test
-  public void testTryClaimDonePositionFromPartitionQueryPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(PARTITION_QUERY);
-
-    final boolean isClaimed = tracker.tryClaim(new PartitionPosition(
-        Timestamp.MAX_VALUE,
-        DONE
-    ));
-
-    assertTrue(isClaimed);
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimDonePositionFromWaitForChildrenPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(WAIT_FOR_CHILDREN);
-
-    tracker.tryClaim(new PartitionPosition(
-        Timestamp.ofTimeSecondsAndNanos(20L, 30),
-        DONE
-    ));
-  }
-
-  @Test
-  public void testTryClaimDonePositionFromWaitForParentsPosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(WAIT_FOR_PARENTS);
-
-    final boolean isClaimed = tracker.tryClaim(new PartitionPosition(
-        Timestamp.MAX_VALUE,
-        DONE
-    ));
-
-    assertTrue(isClaimed);
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void testTryClaimDonePositionFromDonePosition() {
-    tracker.setLastClaimedTimestamp(restriction.getStartTimestamp());
-    tracker.setLastClaimedMode(DONE);
-
-    final boolean isClaimed = tracker.tryClaim(new PartitionPosition(
-        Timestamp.MAX_VALUE,
-        DONE
-    ));
-
-    assertTrue(isClaimed);
+  public void testTryClaimTimestampInThePastThrowsAnError() {
+    tracker.tryClaim(PartitionPosition.continueQuery(Timestamp.ofTimeSecondsAndNanos(10L, 19)));
   }
 
   @Test
@@ -296,5 +118,67 @@ public class PartitionRestrictionTrackerTest {
   @Test
   public void testIsBounded() {
     assertEquals(IsBounded.UNBOUNDED, tracker.isBounded());
+  }
+
+  private static class TryClaimTestScenario {
+
+    private final PartitionRestrictionTracker restrictionTracker;
+    private final Timestamp timestamp;
+    public PartitionMode fromMode;
+    public PartitionMode toMode;
+
+    private TryClaimTestScenario(
+        PartitionRestrictionTracker restrictionTracker,
+        Timestamp timestamp) {
+      this.restrictionTracker = restrictionTracker;
+      this.timestamp = timestamp;
+    }
+
+    public TryClaimTestScenario from(PartitionMode from) {
+      this.fromMode = from;
+      return this;
+    }
+
+    public TryClaimTestScenario to(PartitionMode to) {
+      this.toMode = to;
+      return this;
+    }
+
+    public void assertSuccess() {
+      run(false);
+    }
+
+    public void assertError() {
+      run(true);
+    }
+
+    private void run(boolean errorExpected) {
+      restrictionTracker.setLastClaimedTimestamp(timestamp);
+      restrictionTracker.setLastClaimedMode(fromMode);
+      final Consumer<PartitionPosition> assertFn = errorExpected ?
+          (PartitionPosition position) -> assertThrows(IllegalArgumentException.class,
+              () -> restrictionTracker.tryClaim(position)) :
+          (PartitionPosition position) -> assertTrue(restrictionTracker.tryClaim(position));
+
+      switch (toMode) {
+        case PARTITION_QUERY:
+          assertFn.accept(PartitionPosition.continueQuery(timestamp));
+          break;
+        case WAIT_FOR_CHILDREN:
+          assertFn.accept(PartitionPosition.waitForChildren(timestamp));
+          break;
+        case WAIT_FOR_PARENTS:
+          assertFn.accept(PartitionPosition.waitForParents(timestamp));
+          break;
+        case DELETE_PARTITION:
+          assertFn.accept(PartitionPosition.deletePartition(timestamp));
+          break;
+        case DONE:
+          assertFn.accept(PartitionPosition.done());
+          break;
+        default:
+          throw new IllegalArgumentException("Unknown mode " + toMode);
+      }
+    }
   }
 }

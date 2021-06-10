@@ -39,6 +39,10 @@ public class PartitionPosition implements Serializable {
     return new PartitionPosition(timestamp, PartitionMode.WAIT_FOR_PARENTS);
   }
 
+  public static PartitionPosition deletePartition(Timestamp timestamp) {
+    return new PartitionPosition(timestamp, PartitionMode.DELETE_PARTITION);
+  }
+
   public static PartitionPosition done() {
     return new PartitionPosition(Timestamp.MAX_VALUE, PartitionMode.DONE);
   }

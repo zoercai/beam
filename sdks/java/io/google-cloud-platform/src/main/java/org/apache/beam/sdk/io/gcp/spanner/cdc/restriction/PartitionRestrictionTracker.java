@@ -16,6 +16,7 @@
 
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DELETE_PARTITION;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DONE;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.PARTITION_QUERY;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_CHILDREN;
@@ -58,10 +59,11 @@ public class PartitionRestrictionTracker
     checkArgument(
         (lastClaimedMode == null && mode == PARTITION_QUERY) ||
             (lastClaimedMode == PARTITION_QUERY && mode == PARTITION_QUERY) ||
-            (lastClaimedMode == PARTITION_QUERY && mode == DONE) ||
+            (lastClaimedMode == PARTITION_QUERY && mode == DELETE_PARTITION) ||
             (lastClaimedMode == PARTITION_QUERY && mode == WAIT_FOR_CHILDREN) ||
             (lastClaimedMode == WAIT_FOR_CHILDREN && mode == WAIT_FOR_PARENTS) ||
-            (lastClaimedMode == WAIT_FOR_PARENTS && mode == DONE),
+            (lastClaimedMode == WAIT_FOR_PARENTS && mode == DELETE_PARTITION) ||
+            (lastClaimedMode == DELETE_PARTITION && mode == DONE),
         "Invalid mode transition claim, from %s to %s",
         lastClaimedMode, mode
     );

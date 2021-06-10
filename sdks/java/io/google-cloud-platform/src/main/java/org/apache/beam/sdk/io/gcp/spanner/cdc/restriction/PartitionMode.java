@@ -20,5 +20,6 @@ public enum PartitionMode {
   PARTITION_QUERY,
   WAIT_FOR_CHILDREN,
   WAIT_FOR_PARENTS,
+  DELETE_PARTITION,
   DONE
 }
