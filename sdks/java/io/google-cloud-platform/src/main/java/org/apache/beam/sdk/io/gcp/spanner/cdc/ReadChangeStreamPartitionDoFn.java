@@ -18,12 +18,16 @@ package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.CREATED;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.FINISHED;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.SCHEDULED;
 
+import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.ResultSet;
 import com.google.cloud.spanner.Struct;
 import com.google.gson.Gson;
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamDao;
@@ -44,6 +48,7 @@ import org.apache.beam.sdk.transforms.DoFn.UnboundedPerElement;
 import org.apache.beam.sdk.transforms.splittabledofn.ManualWatermarkEstimator;
 import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker;
 import org.apache.beam.sdk.transforms.splittabledofn.WatermarkEstimators.Manual;
+import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -112,69 +117,70 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
         for (ChangeStreamRecord record : records) {
           // FIXME: We should error if the record is of an unknown type
-          boolean isClaimed = false;
+          Optional<ProcessContinuation> maybeContinuation = Optional.empty();
           if (record instanceof DataChangesRecord) {
-            isClaimed = processDataChangesRecord(
+            maybeContinuation = processDataChangesRecord(
                 (DataChangesRecord) record,
                 tracker,
                 receiver,
                 watermarkEstimator
             );
           } else if (record instanceof HeartbeatRecord) {
-            isClaimed = processHeartbeatRecord(
+            maybeContinuation = processHeartbeatRecord(
                 (HeartbeatRecord) record,
                 tracker,
                 watermarkEstimator
             );
           } else if (record instanceof ChildPartitionsRecord) {
-            isClaimed = processChildPartitionsRecord(
+            maybeContinuation = processChildPartitionsRecord(
                 (ChildPartitionsRecord) record,
                 element,
                 tracker,
                 watermarkEstimator
             );
           }
-          if (!isClaimed) {
-            return ProcessContinuation.stop();
+          if (maybeContinuation.isPresent()) {
+            return maybeContinuation.get();
           }
         }
       }
 
+      // FIXME: On every case here we should wait for parent partitions and delete the current partition
       tracker.tryClaim(PartitionPosition.done());
       return ProcessContinuation.stop();
     }
   }
 
-  private boolean processDataChangesRecord(
+  private Optional<ProcessContinuation> processDataChangesRecord(
       DataChangesRecord record,
       RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
       OutputReceiver<DataChangesRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator) {
     final com.google.cloud.Timestamp commitTimestamp = record.getCommitTimestamp();
     if (!tracker.tryClaim(PartitionPosition.continueQuery(commitTimestamp))) {
-      return false;
+      return Optional.of(ProcessContinuation.stop());
     }
     receiver.output(record);
     watermarkEstimator.setWatermark(new Instant(commitTimestamp.toSqlTimestamp().getTime()));
 
-    return true;
+    return Optional.empty();
   }
 
-  private boolean processHeartbeatRecord(
+  private Optional<ProcessContinuation> processHeartbeatRecord(
       HeartbeatRecord record,
       RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
     final com.google.cloud.Timestamp timestamp = record.getTimestamp();
     if (!tracker.tryClaim(PartitionPosition.continueQuery(timestamp))) {
-      return false;
+      return Optional.of(ProcessContinuation.stop());
     }
     watermarkEstimator.setWatermark(new Instant(timestamp.toSqlTimestamp().getTime()));
 
-    return true;
+    return Optional.empty();
   }
 
-  private boolean processChildPartitionsRecord(
+  private Optional<ProcessContinuation> processChildPartitionsRecord(
       ChildPartitionsRecord record,
       PartitionMetadata currentPartition,
       RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
@@ -182,11 +188,9 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   ) {
     final com.google.cloud.Timestamp startTimestamp = record.getStartTimestamp();
     if (!tracker.tryClaim(PartitionPosition.continueQuery(startTimestamp))) {
-      return false;
+      return Optional.of(ProcessContinuation.stop());
     }
-
     // Updates the metadata table
-    // FIXME: Use the DAO if possible
     // FIXME: We will need to batch the records here
     // FIXME: Figure out what to do if this throws an exception
     final List<PartitionMetadata> newChildPartitions = partitionMetadataRowsFrom(record, currentPartition);
@@ -195,16 +199,44 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       transaction.updateState(currentPartition.getPartitionToken(), FINISHED);
       return null;
     });
-
     watermarkEstimator.setWatermark(new Instant(startTimestamp.toSqlTimestamp().getTime()));
 
+    // Waits for child partitions to be scheduled / finished
     // TODO: Wait for child partitions to be scheduled
-    // tracker.tryClaim(PartitionPosition.waitForChildren(startTimestamp));
-    // TODO: Wait for parent partitions to be deleted
-    // tracker.tryClaim(PartitionPosition.waitForParents(startTimestamp));
-    // TODO: Delete the current partition from the partitions metadata table
+    if (!tracker.tryClaim(PartitionPosition.waitForChildren(startTimestamp))) {
+      return Optional.of(ProcessContinuation.stop());
+    }
+    long numberOfFinishedChildren = partitionMetadataDao.countChildPartitionsInStates(
+        currentPartition.getPartitionToken(),
+        Arrays.asList(SCHEDULED, FINISHED)
+    );
+    // TODO: number of child partition should probably be added into the restriction
+    if (numberOfFinishedChildren < record.getChildPartitions().size()) {
+      // TODO: Adjust this interval
+      return Optional.of(ProcessContinuation.resume().withResumeDelay(Duration.millis(100)));
+    }
 
-    return true;
+    // Waits for parent partitions to be deleted
+    // TODO: Wait for parent partitions to be deleted
+    if (!tracker.tryClaim(PartitionPosition.waitForParents(startTimestamp))) {
+      return Optional.of(ProcessContinuation.stop());
+    }
+    long numberOfExistingParents = partitionMetadataDao.countExistingParents(
+        currentPartition.getPartitionToken()
+    );
+    if (numberOfExistingParents > 0) {
+      // TODO: Adjust this interval
+      return Optional.of(ProcessContinuation.resume().withResumeDelay(Duration.millis(100)));
+    }
+
+    // Deletes current partition
+    // TODO: Delete the current partition from the partitions metadata table
+    if (!tracker.tryClaim(PartitionPosition.deletePartition(startTimestamp))) {
+      return Optional.of(ProcessContinuation.stop());
+    }
+    partitionMetadataDao.delete(currentPartition.getPartitionToken());
+
+    return Optional.empty();
   }
 
   private List<PartitionMetadata> partitionMetadataRowsFrom(

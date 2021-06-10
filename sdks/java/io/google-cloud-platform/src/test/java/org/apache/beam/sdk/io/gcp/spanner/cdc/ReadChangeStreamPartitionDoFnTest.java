@@ -147,7 +147,7 @@ public class ReadChangeStreamPartitionDoFnTest {
         watermarkEstimator
     );
 
-    assertEquals(result, ProcessContinuation.stop());
+    assertEquals(ProcessContinuation.stop(), result);
     verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getCommitTimestamp()));
     verify(outputReceiver).output(record);
     verify(watermarkEstimator).setWatermark(new Instant(record.getCommitTimestamp().toSqlTimestamp().getTime()));
@@ -178,7 +178,7 @@ public class ReadChangeStreamPartitionDoFnTest {
         watermarkEstimator
     );
 
-    assertEquals(result, ProcessContinuation.stop());
+    assertEquals(ProcessContinuation.stop(), result);
     verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getTimestamp()));
     verify(outputReceiver, never()).output(any(DataChangesRecord.class));
     verify(watermarkEstimator).setWatermark(new Instant(record.getTimestamp().toSqlTimestamp().getTime()));
@@ -206,8 +206,10 @@ public class ReadChangeStreamPartitionDoFnTest {
     final ResultSet resultSet = mock(ResultSet.class);
     final InTransactionContext transaction = mock(InTransactionContext.class);
 
-    when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(partitionMetadataDao.runInTransaction(anyString(), any(Function.class))).thenAnswer(new TestTransactionAnswer(transaction));
+    when(partitionMetadataDao.countChildPartitionsInStates(PARTITION_TOKEN, Arrays.asList(SCHEDULED, FINISHED))).thenReturn(1L);
+    when(partitionMetadataDao.countExistingParents(PARTITION_TOKEN)).thenReturn(0L);
+    when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
     when(restrictionTracker.tryClaim(any(PartitionPosition.class))).thenReturn(true);
@@ -219,8 +221,11 @@ public class ReadChangeStreamPartitionDoFnTest {
         watermarkEstimator
     );
 
-    assertEquals(result, ProcessContinuation.stop());
+    assertEquals(ProcessContinuation.stop(), result);
     verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getStartTimestamp()));
+    verify(restrictionTracker).tryClaim(PartitionPosition.waitForChildren(record.getStartTimestamp()));
+    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParents(record.getStartTimestamp()));
+    verify(restrictionTracker).tryClaim(PartitionPosition.deletePartition(record.getStartTimestamp()));
     verify(outputReceiver, never()).output(any(DataChangesRecord.class));
     verify(watermarkEstimator).setWatermark(new Instant(record.getStartTimestamp().toSqlTimestamp().getTime()));
     verify(transaction).insert(Collections.singletonList(PartitionMetadata.newBuilder()
@@ -235,6 +240,7 @@ public class ReadChangeStreamPartitionDoFnTest {
         .build()
     ));
     verify(transaction).updateState(PARTITION_TOKEN, FINISHED);
+    verify(partitionMetadataDao).delete(PARTITION_TOKEN);
   }
 
   // ChildPartitionRecord - Partition Split

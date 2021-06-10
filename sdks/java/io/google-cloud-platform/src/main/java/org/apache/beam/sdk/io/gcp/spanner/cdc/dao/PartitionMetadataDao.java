@@ -10,6 +10,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
 
+// TODO: Integration test
 public class PartitionMetadataDao {
 
   // Metadata table column names
@@ -35,6 +36,13 @@ public class PartitionMetadataDao {
     return databaseClient.write(ImmutableList.of(mutation));
   }
 
+  // TODO: Implement
+  public long countChildPartitionsInStates(
+      String partitionToken,
+      List<PartitionMetadata.State> states) {
+    throw new UnsupportedOperationException("Unimplemented");
+  }
+
   public <T> T runInTransaction(String tableName, Function<InTransactionContext, T> callable) {
     return databaseClient
         .readWriteTransaction()
@@ -42,6 +50,16 @@ public class PartitionMetadataDao {
           final InTransactionContext dao = new InTransactionContext(tableName, transaction);
           return callable.apply(dao);
         });
+  }
+
+  // TODO: Implement
+  public long countExistingParents(String partitionToken) {
+    throw new UnsupportedOperationException("Unimplemented");
+  }
+
+  // TODO: Implement
+  public void delete(String partitionToken) {
+    throw new UnsupportedOperationException("Unimplemented");
   }
 
   public static class InTransactionContext {
