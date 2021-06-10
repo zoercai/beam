@@ -50,8 +50,6 @@ import org.mockito.stubbing.Answer;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-// FIXME: We should assert on the restriction
-// FIXME: We should assert on the watermark
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(DaoFactory.class)
 public class ReadChangeStreamPartitionDoFnTest {
@@ -110,6 +108,9 @@ public class ReadChangeStreamPartitionDoFnTest {
   //   - Updates restriction
   //   - Updates watermark
   //   - Sends to output stream
+  //   - Marks the current partition as finished
+  //   - Waits for parent partitions
+  //   - Deletes itself
   @Test
   public void testDoFnProcessesDataRecords() {
     final DataChangesRecord record = new DataChangesRecord(
@@ -160,6 +161,9 @@ public class ReadChangeStreamPartitionDoFnTest {
   //   - Updates restriction
   //   - Updates watermark
   //   - Does NOT send to output stream
+  //   - Marks the current partition as finished
+  //   - Waits for parent partitions
+  //   - Deletes itself
   @Test
   public void testDoFnProcessesHeartbeatRecords() {
     final HeartbeatRecord record = new HeartbeatRecord(Timestamp.ofTimeSecondsAndNanos(20, 20));
@@ -206,13 +210,13 @@ public class ReadChangeStreamPartitionDoFnTest {
     final ResultSet resultSet = mock(ResultSet.class);
     final InTransactionContext transaction = mock(InTransactionContext.class);
 
-    when(partitionMetadataDao.runInTransaction(anyString(), any(Function.class))).thenAnswer(new TestTransactionAnswer(transaction));
-    when(partitionMetadataDao.countChildPartitionsInStates(PARTITION_TOKEN, Arrays.asList(SCHEDULED, FINISHED))).thenReturn(1L);
-    when(partitionMetadataDao.countExistingParents(PARTITION_TOKEN)).thenReturn(0L);
     when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(recordAsStruct);
     when(restrictionTracker.tryClaim(any(PartitionPosition.class))).thenReturn(true);
+    when(partitionMetadataDao.runInTransaction(anyString(), any(Function.class))).thenAnswer(new TestTransactionAnswer(transaction));
+    when(partitionMetadataDao.countChildPartitionsInStates(PARTITION_TOKEN, Arrays.asList(SCHEDULED, FINISHED))).thenReturn(1L);
+    when(partitionMetadataDao.countExistingParents(PARTITION_TOKEN)).thenReturn(0L);
 
     final ProcessContinuation result = doFn.processElement(
         element,
@@ -223,9 +227,9 @@ public class ReadChangeStreamPartitionDoFnTest {
 
     assertEquals(ProcessContinuation.stop(), result);
     verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getStartTimestamp()));
-    verify(restrictionTracker).tryClaim(PartitionPosition.waitForChildren(record.getStartTimestamp()));
-    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParents(record.getStartTimestamp()));
-    verify(restrictionTracker).tryClaim(PartitionPosition.deletePartition(record.getStartTimestamp()));
+    verify(restrictionTracker).tryClaim(PartitionPosition.waitForChildren());
+    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParents());
+    verify(restrictionTracker).tryClaim(PartitionPosition.deletePartition());
     verify(outputReceiver, never()).output(any(DataChangesRecord.class));
     verify(watermarkEstimator).setWatermark(new Instant(record.getStartTimestamp().toSqlTimestamp().getTime()));
     verify(transaction).insert(Collections.singletonList(PartitionMetadata.newBuilder()

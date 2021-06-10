@@ -1,5 +1,6 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DELETE_PARTITION;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DONE;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.PARTITION_QUERY;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_CHILDREN;
@@ -30,23 +31,31 @@ public class PartitionPositionTest {
   @Test
   public void testPositionWaitForChildren() {
     assertEquals(
-        new PartitionPosition(timestamp, WAIT_FOR_CHILDREN),
-        PartitionPosition.waitForChildren(timestamp)
+        new PartitionPosition(WAIT_FOR_CHILDREN),
+        PartitionPosition.waitForChildren()
     );
   }
 
   @Test
   public void testPositionWaitForParents() {
     assertEquals(
-        new PartitionPosition(timestamp, WAIT_FOR_PARENTS),
-        PartitionPosition.waitForParents(timestamp)
+        new PartitionPosition(WAIT_FOR_PARENTS),
+        PartitionPosition.waitForParents()
+    );
+  }
+
+  @Test
+  public void testPositionDeletePartition() {
+    assertEquals(
+        new PartitionPosition(DELETE_PARTITION),
+        PartitionPosition.deletePartition()
     );
   }
 
   @Test
   public void testPositionDone() {
     assertEquals(
-        new PartitionPosition(Timestamp.MAX_VALUE, DONE),
+        new PartitionPosition(DONE),
         PartitionPosition.done()
     );
   }

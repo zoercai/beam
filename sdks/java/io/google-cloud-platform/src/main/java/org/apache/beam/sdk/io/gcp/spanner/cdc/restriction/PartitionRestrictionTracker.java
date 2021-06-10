@@ -25,6 +25,7 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkState;
 
 import com.google.cloud.Timestamp;
+import java.util.Optional;
 import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker;
 import org.apache.beam.sdk.transforms.splittabledofn.SplitResult;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.VisibleForTesting;
@@ -44,30 +45,30 @@ public class PartitionRestrictionTracker
 
   @Override
   public boolean tryClaim(PartitionPosition position) {
-    final Timestamp timestamp = position.getTimestamp();
+    final Optional<Timestamp> maybeTimestamp = position.getTimestamp();
     final PartitionMode mode = position.getMode();
     checkArgument(
-        lastClaimedTimestamp == null || timestamp.compareTo(lastClaimedTimestamp) >= 0,
+        lastClaimedTimestamp == null || maybeTimestamp.map(t -> t.compareTo(lastClaimedTimestamp) >= 0).orElse(true),
         "Trying to claim timestamp %s while last claimed was %s.",
         position, lastClaimedTimestamp
     );
     checkArgument(
-        timestamp.compareTo(restriction.getStartTimestamp()) >= 0,
+        maybeTimestamp.map(t -> t.compareTo(restriction.getStartTimestamp()) >= 0).orElse(true),
         "Trying to claim timestamp %s before start timestamp %s.",
-        timestamp, restriction.getStartTimestamp()
+        maybeTimestamp.orElse(null), restriction.getStartTimestamp()
     );
     checkArgument(
         (lastClaimedMode == null && mode == PARTITION_QUERY) ||
             (lastClaimedMode == PARTITION_QUERY && mode == PARTITION_QUERY) ||
-            (lastClaimedMode == PARTITION_QUERY && mode == DELETE_PARTITION) ||
             (lastClaimedMode == PARTITION_QUERY && mode == WAIT_FOR_CHILDREN) ||
+            (lastClaimedMode == PARTITION_QUERY && mode == WAIT_FOR_PARENTS) ||
             (lastClaimedMode == WAIT_FOR_CHILDREN && mode == WAIT_FOR_PARENTS) ||
             (lastClaimedMode == WAIT_FOR_PARENTS && mode == DELETE_PARTITION) ||
             (lastClaimedMode == DELETE_PARTITION && mode == DONE),
         "Invalid mode transition claim, from %s to %s",
         lastClaimedMode, mode
     );
-    setLastClaimedTimestamp(timestamp);
+    maybeTimestamp.ifPresent(this::setLastClaimedTimestamp);
     setLastClaimedMode(mode);
     return true;
   }
@@ -90,11 +91,6 @@ public class PartitionRestrictionTracker
         lastClaimedTimestamp != null,
         "Last attempted timestamp should not be null. No work was claimed from timestamp %s.",
         restriction.getStartTimestamp()
-    );
-    checkState(
-        lastClaimedTimestamp.compareTo(Timestamp.MAX_VALUE) == 0,
-        "Last attempted timestamp was %s. Final claim was never made.",
-        lastClaimedTimestamp
     );
     checkState(
         lastClaimedMode != null,

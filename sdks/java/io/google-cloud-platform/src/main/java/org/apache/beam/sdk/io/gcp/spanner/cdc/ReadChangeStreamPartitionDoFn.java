@@ -20,7 +20,6 @@ import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.Sta
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.FINISHED;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.SCHEDULED;
 
-import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.ResultSet;
 import com.google.cloud.spanner.Struct;
 import com.google.gson.Gson;
@@ -203,7 +202,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
     // Waits for child partitions to be scheduled / finished
     // TODO: Wait for child partitions to be scheduled
-    if (!tracker.tryClaim(PartitionPosition.waitForChildren(startTimestamp))) {
+    if (!tracker.tryClaim(PartitionPosition.waitForChildren())) {
       return Optional.of(ProcessContinuation.stop());
     }
     long numberOfFinishedChildren = partitionMetadataDao.countChildPartitionsInStates(
@@ -218,7 +217,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
     // Waits for parent partitions to be deleted
     // TODO: Wait for parent partitions to be deleted
-    if (!tracker.tryClaim(PartitionPosition.waitForParents(startTimestamp))) {
+    if (!tracker.tryClaim(PartitionPosition.waitForParents())) {
       return Optional.of(ProcessContinuation.stop());
     }
     long numberOfExistingParents = partitionMetadataDao.countExistingParents(
@@ -231,7 +230,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
     // Deletes current partition
     // TODO: Delete the current partition from the partitions metadata table
-    if (!tracker.tryClaim(PartitionPosition.deletePartition(startTimestamp))) {
+    if (!tracker.tryClaim(PartitionPosition.deletePartition())) {
       return Optional.of(ProcessContinuation.stop());
     }
     partitionMetadataDao.delete(currentPartition.getPartitionToken());

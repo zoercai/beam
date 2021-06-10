@@ -20,41 +20,47 @@ import com.google.cloud.Timestamp;
 import com.google.common.annotations.VisibleForTesting;
 import java.io.Serializable;
 import java.util.Objects;
+import java.util.Optional;
 
 public class PartitionPosition implements Serializable {
 
   private static final long serialVersionUID = -9088898012221404492L;
-  private final Timestamp timestamp;
+  private final Optional<Timestamp> maybeTimestamp;
   private final PartitionMode mode;
 
   public static PartitionPosition continueQuery(Timestamp timestamp) {
     return new PartitionPosition(timestamp, PartitionMode.PARTITION_QUERY);
   }
 
-  public static PartitionPosition waitForChildren(Timestamp timestamp) {
-    return new PartitionPosition(timestamp, PartitionMode.WAIT_FOR_CHILDREN);
+  public static PartitionPosition waitForChildren() {
+    return new PartitionPosition(PartitionMode.WAIT_FOR_CHILDREN);
   }
 
-  public static PartitionPosition waitForParents(Timestamp timestamp) {
-    return new PartitionPosition(timestamp, PartitionMode.WAIT_FOR_PARENTS);
+  public static PartitionPosition waitForParents() {
+    return new PartitionPosition(PartitionMode.WAIT_FOR_PARENTS);
   }
 
-  public static PartitionPosition deletePartition(Timestamp timestamp) {
-    return new PartitionPosition(timestamp, PartitionMode.DELETE_PARTITION);
+  public static PartitionPosition deletePartition() {
+    return new PartitionPosition(PartitionMode.DELETE_PARTITION);
   }
 
   public static PartitionPosition done() {
-    return new PartitionPosition(Timestamp.MAX_VALUE, PartitionMode.DONE);
+    return new PartitionPosition(PartitionMode.DONE);
   }
 
   @VisibleForTesting
   protected PartitionPosition(Timestamp timestamp, PartitionMode mode) {
-    this.timestamp = timestamp;
+    this.maybeTimestamp = Optional.ofNullable(timestamp);
     this.mode = mode;
   }
 
-  public Timestamp getTimestamp() {
-    return timestamp;
+  @VisibleForTesting
+  protected PartitionPosition(PartitionMode mode) {
+    this(null, mode);
+  }
+
+  public Optional<Timestamp> getTimestamp() {
+    return maybeTimestamp;
   }
 
   public PartitionMode getMode() {
@@ -70,19 +76,19 @@ public class PartitionPosition implements Serializable {
       return false;
     }
     PartitionPosition that = (PartitionPosition) o;
-    return Objects.equals(timestamp, that.timestamp) &&
+    return Objects.equals(maybeTimestamp, that.maybeTimestamp) &&
         mode == that.mode;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(timestamp, mode);
+    return Objects.hash(maybeTimestamp, mode);
   }
 
   @Override
   public String toString() {
     return "PartitionPosition{" +
-        "timestamp=" + timestamp +
+        "maybeTimestamp=" + maybeTimestamp +
         ", mode=" + mode +
         '}';
   }

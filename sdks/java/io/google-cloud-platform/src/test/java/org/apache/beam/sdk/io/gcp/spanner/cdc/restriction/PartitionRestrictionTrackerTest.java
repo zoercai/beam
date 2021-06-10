@@ -41,8 +41,8 @@ public class PartitionRestrictionTrackerTest {
 
     runner.from(PARTITION_QUERY).to(PARTITION_QUERY).assertSuccess();
     runner.from(PARTITION_QUERY).to(WAIT_FOR_CHILDREN).assertSuccess();
-    runner.from(PARTITION_QUERY).to(WAIT_FOR_PARENTS).assertError();
-    runner.from(PARTITION_QUERY).to(DELETE_PARTITION).assertSuccess();
+    runner.from(PARTITION_QUERY).to(WAIT_FOR_PARENTS).assertSuccess();
+    runner.from(PARTITION_QUERY).to(DELETE_PARTITION).assertError();
     runner.from(PARTITION_QUERY).to(DONE).assertError();
 
     runner.from(WAIT_FOR_CHILDREN).to(PARTITION_QUERY).assertError();
@@ -81,8 +81,8 @@ public class PartitionRestrictionTrackerTest {
   }
 
   @Test
-  public void testCheckDoneWithMaxTimestampAndDoneMode() {
-    tracker.setLastClaimedTimestamp(Timestamp.MAX_VALUE);
+  public void testCheckDoneWithSomeTimestampAndDoneMode() {
+    tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
     tracker.setLastClaimedMode(DONE);
 
     // No exceptions should be raised, which indicates success
@@ -95,22 +95,40 @@ public class PartitionRestrictionTrackerTest {
   }
 
   @Test(expected = IllegalStateException.class)
-  public void testCheckDoneWithLastClaimedTimestampNotEqualToMaxTimestamp() {
-    tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
-    tracker.setLastClaimedMode(DONE);
-
-    tracker.checkDone();
-  }
-
-  @Test(expected = IllegalStateException.class)
   public void testCheckDoneWithNullLastClaimedMode() {
+    tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
+
     tracker.checkDone();
   }
 
   @Test(expected = IllegalStateException.class)
   public void testCheckDoneWithLastClaimedModeAsPartitionQuery() {
-    tracker.setLastClaimedTimestamp(Timestamp.MAX_VALUE);
+    tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
     tracker.setLastClaimedMode(PARTITION_QUERY);
+
+    tracker.checkDone();
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void testCheckDoneWithLastClaimedModeAsWaitForChildren() {
+    tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
+    tracker.setLastClaimedMode(WAIT_FOR_CHILDREN);
+
+    tracker.checkDone();
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void testCheckDoneWithLastClaimedModeAsWaitForParents() {
+    tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
+    tracker.setLastClaimedMode(WAIT_FOR_PARENTS);
+
+    tracker.checkDone();
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void testCheckDoneWithLastClaimedModeAsDeletePartition() {
+    tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
+    tracker.setLastClaimedMode(DELETE_PARTITION);
 
     tracker.checkDone();
   }
@@ -165,13 +183,13 @@ public class PartitionRestrictionTrackerTest {
           assertFn.accept(PartitionPosition.continueQuery(timestamp));
           break;
         case WAIT_FOR_CHILDREN:
-          assertFn.accept(PartitionPosition.waitForChildren(timestamp));
+          assertFn.accept(PartitionPosition.waitForChildren());
           break;
         case WAIT_FOR_PARENTS:
-          assertFn.accept(PartitionPosition.waitForParents(timestamp));
+          assertFn.accept(PartitionPosition.waitForParents());
           break;
         case DELETE_PARTITION:
-          assertFn.accept(PartitionPosition.deletePartition(timestamp));
+          assertFn.accept(PartitionPosition.deletePartition());
           break;
         case DONE:
           assertFn.accept(PartitionPosition.done());
