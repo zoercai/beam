@@ -1400,10 +1400,10 @@ public class SpannerIO {
       checkArgument(
           !getInclusiveStartAt().toSqlTimestamp().before(earliestVersionTime.toSqlTimestamp()));
 
-      // Start time must be after change stream creation time
+      // Start time must be after the change stream database creation time
       checkArgument(!getInclusiveStartAt().toSqlTimestamp()
               .before(changeStreamsDb.getCreateTime().toSqlTimestamp()),
-          "Start time must not be before the change stream creation time.");
+          "Start time must not be before the change stream database creation time.");
 
       DatabaseId databaseId = DatabaseId.of(
           getSpannerConfig().getProjectId().get(),
