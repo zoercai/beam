@@ -100,4 +100,14 @@ public class ColumnType implements Serializable {
   public int hashCode() {
     return Objects.hashCode(getName(), getType(), isPrimaryKey(), getOrdinalPosition());
   }
+
+  @Override
+  public String toString() {
+    return "ColumnType{" +
+        "name='" + name + '\'' +
+        ", type=" + type +
+        ", isPrimaryKey=" + isPrimaryKey +
+        ", ordinalPosition=" + ordinalPosition +
+        '}';
+  }
 }

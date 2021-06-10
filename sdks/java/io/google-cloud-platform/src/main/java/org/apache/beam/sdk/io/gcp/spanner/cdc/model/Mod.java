@@ -115,4 +115,13 @@ public class Mod implements Serializable {
   public int hashCode() {
     return Objects.hashCode(getKeys(), getOldValues(), getNewValues());
   }
+
+  @Override
+  public String toString() {
+    return "Mod{" +
+        "keys=" + keys +
+        ", oldValues=" + oldValues +
+        ", newValues=" + newValues +
+        '}';
+  }
 }

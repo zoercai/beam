@@ -22,7 +22,6 @@ import static org.junit.Assert.assertThrows;
 
 import com.google.cloud.Timestamp;
 import com.google.common.collect.ImmutableList;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State;
 import org.junit.Test;
 import org.junit.runner.RunWith;

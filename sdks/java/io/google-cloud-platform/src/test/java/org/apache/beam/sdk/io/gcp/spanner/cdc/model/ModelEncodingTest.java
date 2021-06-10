@@ -42,6 +42,7 @@ public class ModelEncodingTest {
   @Test
   public void testModCanBeEncoded() throws IOException {
     final Mod mod = new Mod(
+        ImmutableMap.of("keyColumn1", "keyValue1"),
         ImmutableMap.of("column1", "value1", "column2", "oldValue2"),
         ImmutableMap.of("column1", "value1", "column2", "newValue2")
     );
@@ -55,13 +56,6 @@ public class ModelEncodingTest {
   }
 
   @Test
-  public void testRecordSequenceCanBeEncoded() throws IOException {
-    final RecordSequence recordSequence = new RecordSequence(2L);
-
-    assertEquals(recordSequence, encodeAndDecode(recordSequence));
-  }
-
-  @Test
   public void testTypeCodeCanBeEncoded() throws IOException {
     final TypeCode typeCode = new TypeCode("typeCode");
 
@@ -70,12 +64,13 @@ public class ModelEncodingTest {
 
   @Test
   public void testValueCaptureTypeCanBeEncoded() throws IOException {
-    assertEquals(ValueCaptureType.OLD_AND_NEW_VALUES, encodeAndDecode(ValueCaptureType.OLD_AND_NEW_VALUES));
+    assertEquals(ValueCaptureType.OLD_AND_NEW_VALUES,
+        encodeAndDecode(ValueCaptureType.OLD_AND_NEW_VALUES));
   }
 
   @Test
   public void testColumnTypeCanBeEncoded() throws IOException {
-    final ColumnType columnType = new ColumnType("column", new TypeCode("typeCode"), true);
+    final ColumnType columnType = new ColumnType("column", new TypeCode("typeCode"), true, 1);
 
     assertEquals(columnType, encodeAndDecode(columnType));
   }
@@ -90,17 +85,20 @@ public class ModelEncodingTest {
         "3",
         "TableName",
         Arrays.asList(
-            new ColumnType("column1", new TypeCode("typeCode1"), true),
-            new ColumnType("column2", new TypeCode("typeCode2"), false)
+            new ColumnType("column1", new TypeCode("typeCode1"), true, 1),
+            new ColumnType("column2", new TypeCode("typeCode2"), false, 2)
         ),
         Collections.singletonList(
             new Mod(
+                ImmutableMap.of("keyColumn1", "keyValue1"),
                 ImmutableMap.of("column1", "value1", "column2", "oldValue2"),
                 ImmutableMap.of("column1", "value1", "column2", "newValue2")
             )
         ),
         ModType.INSERT,
-        ValueCaptureType.OLD_AND_NEW_VALUES
+        ValueCaptureType.OLD_AND_NEW_VALUES,
+        1,
+        1
     );
 
     assertEquals(dataChangesRecord, encodeAndDecode(dataChangesRecord));

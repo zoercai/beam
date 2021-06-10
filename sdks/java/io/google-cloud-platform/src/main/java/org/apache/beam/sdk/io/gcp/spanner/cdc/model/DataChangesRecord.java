@@ -205,4 +205,22 @@ public class DataChangesRecord implements Serializable {
         getMods(), getModType(), getValueCaptureType(), getNumberOfRecordsInTransaction(),
         getNumberOfPartitionsInTransaction());
   }
+
+  @Override
+  public String toString() {
+    return "DataChangesRecord{" +
+        "partitionToken='" + partitionToken + '\'' +
+        ", commitTimestamp=" + commitTimestamp +
+        ", transactionId='" + transactionId + '\'' +
+        ", isLastRecordInTransactionPartition=" + isLastRecordInTransactionPartition +
+        ", recordSequence='" + recordSequence + '\'' +
+        ", tableName='" + tableName + '\'' +
+        ", rowType=" + rowType +
+        ", mods=" + mods +
+        ", modType=" + modType +
+        ", valueCaptureType=" + valueCaptureType +
+        ", numberOfRecordsInTransaction=" + numberOfRecordsInTransaction +
+        ", numberOfPartitionsInTransaction=" + numberOfPartitionsInTransaction +
+        '}';
+  }
 }
