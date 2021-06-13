@@ -48,6 +48,17 @@ public class PartitionMetadataDao {
     throw new UnsupportedOperationException("Unimplemented");
   }
 
+  public void insert(List<PartitionMetadata> rows) {
+    // FIXME: add table name here
+    final List<Mutation> mutations = rows
+        .stream()
+        .map(row -> PartitionMetadataDao.insertMutationFrom(null, row))
+        .collect(Collectors.toList());
+
+    databaseClient.write(mutations);
+  }
+
+  // TODO: Remove if not necessary
   public <T> T runInTransaction(String tableName, Function<InTransactionContext, T> callable) {
     return databaseClient
         .readWriteTransaction()
@@ -67,6 +78,7 @@ public class PartitionMetadataDao {
     throw new UnsupportedOperationException("Unimplemented");
   }
 
+  // TODO: Remove if not necessary
   public static class InTransactionContext {
 
     private final String tableName;
@@ -101,6 +113,7 @@ public class PartitionMetadataDao {
     }
   }
 
+  // TODO: Make instance based if InTransactionContext is not used
   private static Mutation insertMutationFrom(
       String tableName,
       PartitionMetadata partitionMetadata) {

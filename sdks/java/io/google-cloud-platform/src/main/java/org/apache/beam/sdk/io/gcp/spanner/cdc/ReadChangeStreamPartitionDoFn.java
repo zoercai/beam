@@ -20,6 +20,7 @@ import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.Sta
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.FINISHED;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.SCHEDULED;
 
+import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.ResultSet;
 import com.google.cloud.spanner.Struct;
 import com.google.gson.Gson;
@@ -47,6 +48,7 @@ import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.DoFn.UnboundedPerElement;
 import org.apache.beam.sdk.transforms.splittabledofn.ManualWatermarkEstimator;
 import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker;
+import org.apache.beam.sdk.transforms.splittabledofn.WatermarkEstimator;
 import org.apache.beam.sdk.transforms.splittabledofn.WatermarkEstimators.Manual;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
@@ -108,7 +110,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       OutputReceiver<DataChangesRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
-    // TODO: Add the real change stream query here
     try (ResultSet resultSet = changeStreamDao.changeStreamQuery()) {
       while (resultSet.next()) {
         final Struct rowAsStruct = resultSet.getCurrentRowAsStruct();
@@ -145,7 +146,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
         }
       }
 
-      // FIXME: There is double marking of a partition as finished for child partitions records here
       // Marks the current partition as finished
       partitionMetadataDao.updateState(element.getPartitionToken(), FINISHED);
 
@@ -207,20 +207,16 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
+    // Updates the metadata table
     final com.google.cloud.Timestamp startTimestamp = record.getStartTimestamp();
     if (!tracker.tryClaim(PartitionPosition.continueQuery(startTimestamp))) {
       return Optional.of(ProcessContinuation.stop());
     }
-    // Updates the metadata table
+    watermarkEstimator.setWatermark(new Instant(startTimestamp.toSqlTimestamp().getTime()));
     // FIXME: We will need to batch the records here
     // FIXME: Figure out what to do if this throws an exception
     final List<PartitionMetadata> newChildPartitions = partitionMetadataRowsFrom(record, currentPartition);
-    partitionMetadataDao.runInTransaction(tableName, transaction -> {
-      transaction.insert(newChildPartitions);
-      transaction.updateState(currentPartition.getPartitionToken(), FINISHED);
-      return null;
-    });
-    watermarkEstimator.setWatermark(new Instant(startTimestamp.toSqlTimestamp().getTime()));
+    partitionMetadataDao.insert(newChildPartitions);
 
     // Waits for child partitions to be scheduled / finished
     // TODO: Wait for child partitions to be scheduled
