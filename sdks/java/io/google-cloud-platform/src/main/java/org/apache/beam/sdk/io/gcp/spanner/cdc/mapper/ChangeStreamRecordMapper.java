@@ -48,6 +48,7 @@ public class ChangeStreamRecordMapper {
         .collect(Collectors.toList());
   }
 
+  // TODO: add validation of the internal structure / values of each record parsed
   private ChangeStreamRecord toChangeStreamRecord(String partitionToken, Struct row) {
     if (isDataChangeRecord(row)) {
       return toDataChangeRecord(partitionToken, row.getStruct("data_change_record"));
@@ -56,6 +57,9 @@ public class ChangeStreamRecordMapper {
     } else if (isChildPartitionRecord(row)) {
       return toChildPartitionsRecord(row.getStruct("child_partitions_record"));
     } else {
+      // TODO: Verify if we really want to throw here, or should we just return unknown record type
+      // This could be useful if we add more record types eventually, this would not break the
+      // existing user flows
       throw new IllegalArgumentException("Unknown record type for " + row);
     }
   }

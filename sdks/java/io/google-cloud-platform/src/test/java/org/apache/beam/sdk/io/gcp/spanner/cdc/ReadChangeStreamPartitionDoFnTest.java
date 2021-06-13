@@ -6,7 +6,6 @@ import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.Sta
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.SCHEDULED;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,7 +18,6 @@ import com.google.cloud.spanner.Struct;
 import com.google.common.collect.ImmutableMap;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.function.Function;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamDao;
@@ -258,31 +256,6 @@ public class ReadChangeStreamPartitionDoFnTest {
     verify(partitionMetadataDao).delete(PARTITION_TOKEN);
   }
 
-  // ChildPartitionRecord - Partition Split
-  // PartitionMetadata record
-  // Calls Spanner
-  // Read ChildPartitionRecord Split
-  //   - Updates restriction
-  //   - Updates watermark
-  //   - Marks current partition as finished
-  //   - Inserts the child partitions in the metadata table with state CREATED
-  //   - Waits for child partitions to start being read
-  //   - Waits for parent partitions to be deleted
-  //   - Deletes the current partition from the metadata table
-
-  // ChildPartitionRecord - Partition Merge, All Parents Finished
-  // PartitionMetadata record
-  // Calls Spanner
-  // Read ChildPartitionRecord Merge
-  //   - Updates restriction
-  //   - Updates watermark
-  //   - Checks if all parents finished (in this case yes)
-  //   - Marks current partition as finished
-  //   - Inserts the child partition in the metadata table with state CREATED
-  //   - Waits for child partition to start being read
-  //   - Waits for parent partitions to be deleted
-  //   - Deletes the current partition from the metadata table
-
   // ChildPartitionRecord - Partition Merge, At least one parent NOT finished
   // PartitionMetadata record
   // Calls Spanner
@@ -326,6 +299,7 @@ public class ReadChangeStreamPartitionDoFnTest {
   //   - No permissions for the metadata table
   // --------------------------
 
+  // TODO: Remove if not necessary
   public static class TestTransactionAnswer implements Answer<Object> {
 
     private final InTransactionContext transaction;

@@ -37,6 +37,13 @@ public class PartitionMetadataDao {
   }
 
   // TODO: Implement
+  public long countPartitionsInStates(
+      List<String> partitionTokens,
+      List<PartitionMetadata.State> states) {
+    throw new UnsupportedOperationException("Unimplemented");
+  }
+
+  // TODO: Implement
   public long countChildPartitionsInStates(
       String partitionToken,
       List<PartitionMetadata.State> states) {
@@ -59,11 +66,12 @@ public class PartitionMetadataDao {
   }
 
   // TODO: Remove if not necessary
-  public <T> T runInTransaction(String tableName, Function<InTransactionContext, T> callable) {
+  public <T> T runInTransaction(Function<InTransactionContext, T> callable) {
+    // FIXME: table name should be given in the constructor
     return databaseClient
         .readWriteTransaction()
         .run(transaction -> {
-          final InTransactionContext dao = new InTransactionContext(tableName, transaction);
+          final InTransactionContext dao = new InTransactionContext(null, transaction);
           return callable.apply(dao);
         });
   }
@@ -110,6 +118,14 @@ public class PartitionMetadataDao {
           // .to(null)
           .build();
       transaction.buffer(mutation);
+    }
+
+    // TODO: Implement
+    public long countPartitionsInStates(
+        List<String> partitionTokens,
+        List<PartitionMetadata.State> states
+    ) {
+      throw new UnsupportedOperationException("Unimplemented");
     }
   }
 

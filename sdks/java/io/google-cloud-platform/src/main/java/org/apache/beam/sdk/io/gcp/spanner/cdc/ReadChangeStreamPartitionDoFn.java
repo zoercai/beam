@@ -20,7 +20,6 @@ import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.Sta
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.FINISHED;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.SCHEDULED;
 
-import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.ResultSet;
 import com.google.cloud.spanner.Struct;
 import com.google.gson.Gson;
@@ -40,7 +39,6 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildP
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionPosition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestriction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestrictionTracker;
@@ -48,7 +46,6 @@ import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.DoFn.UnboundedPerElement;
 import org.apache.beam.sdk.transforms.splittabledofn.ManualWatermarkEstimator;
 import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker;
-import org.apache.beam.sdk.transforms.splittabledofn.WatermarkEstimator;
 import org.apache.beam.sdk.transforms.splittabledofn.WatermarkEstimators.Manual;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
@@ -213,6 +210,20 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       return Optional.of(ProcessContinuation.stop());
     }
     watermarkEstimator.setWatermark(new Instant(startTimestamp.toSqlTimestamp().getTime()));
+
+    if (isSplitOrMove(record)) {
+      return processChildPartitionSplit(record, currentPartition, tracker);
+    } else {
+      // TODO: Implement merge
+      throw new UnsupportedOperationException("Merge is unimplemented");
+    }
+  }
+
+  private Optional<ProcessContinuation> processChildPartitionSplit(
+      ChildPartitionsRecord record,
+      PartitionMetadata currentPartition,
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker
+  ) {
     // FIXME: We will need to batch the records here
     // FIXME: Figure out what to do if this throws an exception
     final List<PartitionMetadata> newChildPartitions = partitionMetadataRowsFrom(record, currentPartition);
@@ -234,6 +245,11 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
     }
 
     return Optional.empty();
+  }
+
+  // TODO: Confirm the assumption that within a child partitions record it could either be a split or a merge, but not both
+  private boolean isSplitOrMove(ChildPartitionsRecord record) {
+    return record.getChildPartitions().get(0).getParentTokens().size() == 1;
   }
 
   private List<PartitionMetadata> partitionMetadataRowsFrom(
