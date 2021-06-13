@@ -2,9 +2,10 @@ package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DELETE_PARTITION;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DONE;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.PARTITION_QUERY;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_CHILDREN;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_PARENTS;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.FINISH_PARTITION;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.QUERY_CHANGE_STREAM;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_CHILD_PARTITIONS;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_PARENT_PARTITIONS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -33,46 +34,52 @@ public class PartitionRestrictionTrackerTest {
     final TryClaimTestScenario runner = new TryClaimTestScenario(
         tracker, Timestamp.ofTimeSecondsAndNanos(10L, 20));
 
-    runner.from(null).to(PARTITION_QUERY).assertSuccess();
-    runner.from(null).to(WAIT_FOR_CHILDREN).assertError();
-    runner.from(null).to(WAIT_FOR_PARENTS).assertError();
+    runner.from(null).to(QUERY_CHANGE_STREAM).assertSuccess();
+    runner.from(null).to(WAIT_FOR_CHILD_PARTITIONS).assertError();
+    runner.from(null).to(FINISH_PARTITION).assertError();
+    runner.from(null).to(WAIT_FOR_PARENT_PARTITIONS).assertError();
     runner.from(null).to(DELETE_PARTITION).assertError();
     runner.from(null).to(DONE).assertError();
 
-    runner.from(PARTITION_QUERY).to(PARTITION_QUERY).assertSuccess();
-    runner.from(PARTITION_QUERY).to(WAIT_FOR_CHILDREN).assertSuccess();
-    runner.from(PARTITION_QUERY).to(WAIT_FOR_PARENTS).assertSuccess();
-    runner.from(PARTITION_QUERY).to(DELETE_PARTITION).assertError();
-    runner.from(PARTITION_QUERY).to(DONE).assertError();
+    runner.from(QUERY_CHANGE_STREAM).to(QUERY_CHANGE_STREAM).assertSuccess();
+    runner.from(QUERY_CHANGE_STREAM).to(WAIT_FOR_CHILD_PARTITIONS).assertSuccess();
+    runner.from(QUERY_CHANGE_STREAM).to(FINISH_PARTITION).assertSuccess();
+    runner.from(QUERY_CHANGE_STREAM).to(WAIT_FOR_PARENT_PARTITIONS).assertError();
+    runner.from(QUERY_CHANGE_STREAM).to(DELETE_PARTITION).assertError();
+    runner.from(QUERY_CHANGE_STREAM).to(DONE).assertError();
 
-    runner.from(WAIT_FOR_CHILDREN).to(PARTITION_QUERY).assertError();
-    runner.from(WAIT_FOR_CHILDREN).to(WAIT_FOR_CHILDREN).assertError();
-    runner.from(WAIT_FOR_CHILDREN).to(WAIT_FOR_PARENTS).assertSuccess();
-    runner.from(WAIT_FOR_CHILDREN).to(DELETE_PARTITION).assertError();
-    runner.from(WAIT_FOR_CHILDREN).to(DONE).assertError();
+    runner.from(WAIT_FOR_CHILD_PARTITIONS).to(QUERY_CHANGE_STREAM).assertError();
+    runner.from(WAIT_FOR_CHILD_PARTITIONS).to(WAIT_FOR_CHILD_PARTITIONS).assertError();
+    runner.from(WAIT_FOR_CHILD_PARTITIONS).to(FINISH_PARTITION).assertSuccess();
+    runner.from(WAIT_FOR_CHILD_PARTITIONS).to(WAIT_FOR_PARENT_PARTITIONS).assertError();
+    runner.from(WAIT_FOR_CHILD_PARTITIONS).to(DELETE_PARTITION).assertError();
+    runner.from(WAIT_FOR_CHILD_PARTITIONS).to(DONE).assertError();
 
-    runner.from(WAIT_FOR_PARENTS).to(PARTITION_QUERY).assertError();
-    runner.from(WAIT_FOR_PARENTS).to(WAIT_FOR_CHILDREN).assertError();
-    runner.from(WAIT_FOR_PARENTS).to(WAIT_FOR_PARENTS).assertError();
-    runner.from(WAIT_FOR_PARENTS).to(DELETE_PARTITION).assertSuccess();
-    runner.from(WAIT_FOR_PARENTS).to(DONE).assertError();
+    runner.from(WAIT_FOR_PARENT_PARTITIONS).to(QUERY_CHANGE_STREAM).assertError();
+    runner.from(WAIT_FOR_PARENT_PARTITIONS).to(WAIT_FOR_CHILD_PARTITIONS).assertError();
+    runner.from(WAIT_FOR_PARENT_PARTITIONS).to(FINISH_PARTITION).assertError();
+    runner.from(WAIT_FOR_PARENT_PARTITIONS).to(WAIT_FOR_PARENT_PARTITIONS).assertError();
+    runner.from(WAIT_FOR_PARENT_PARTITIONS).to(DELETE_PARTITION).assertSuccess();
+    runner.from(WAIT_FOR_PARENT_PARTITIONS).to(DONE).assertError();
 
-    runner.from(DELETE_PARTITION).to(PARTITION_QUERY).assertError();
-    runner.from(DELETE_PARTITION).to(WAIT_FOR_CHILDREN).assertError();
-    runner.from(DELETE_PARTITION).to(WAIT_FOR_PARENTS).assertError();
+    runner.from(DELETE_PARTITION).to(QUERY_CHANGE_STREAM).assertError();
+    runner.from(DELETE_PARTITION).to(WAIT_FOR_CHILD_PARTITIONS).assertError();
+    runner.from(DELETE_PARTITION).to(FINISH_PARTITION).assertError();
+    runner.from(DELETE_PARTITION).to(WAIT_FOR_PARENT_PARTITIONS).assertError();
     runner.from(DELETE_PARTITION).to(DELETE_PARTITION).assertError();
     runner.from(DELETE_PARTITION).to(DONE).assertSuccess();
 
-    runner.from(DONE).to(PARTITION_QUERY).assertError();
-    runner.from(DONE).to(WAIT_FOR_CHILDREN).assertError();
-    runner.from(DONE).to(WAIT_FOR_PARENTS).assertError();
+    runner.from(DONE).to(QUERY_CHANGE_STREAM).assertError();
+    runner.from(DONE).to(WAIT_FOR_CHILD_PARTITIONS).assertError();
+    runner.from(DONE).to(FINISH_PARTITION).assertError();
+    runner.from(DONE).to(WAIT_FOR_PARENT_PARTITIONS).assertError();
     runner.from(DONE).to(DELETE_PARTITION).assertError();
     runner.from(DONE).to(DONE).assertError();
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void testTryClaimTimestampInThePastThrowsAnError() {
-    tracker.tryClaim(PartitionPosition.continueQuery(Timestamp.ofTimeSecondsAndNanos(10L, 19)));
+    tracker.tryClaim(PartitionPosition.queryChangeStream(Timestamp.ofTimeSecondsAndNanos(10L, 19)));
   }
 
   @Test
@@ -104,7 +111,7 @@ public class PartitionRestrictionTrackerTest {
   @Test(expected = IllegalStateException.class)
   public void testCheckDoneWithLastClaimedModeAsPartitionQuery() {
     tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
-    tracker.setLastClaimedMode(PARTITION_QUERY);
+    tracker.setLastClaimedMode(QUERY_CHANGE_STREAM);
 
     tracker.checkDone();
   }
@@ -112,7 +119,7 @@ public class PartitionRestrictionTrackerTest {
   @Test(expected = IllegalStateException.class)
   public void testCheckDoneWithLastClaimedModeAsWaitForChildren() {
     tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
-    tracker.setLastClaimedMode(WAIT_FOR_CHILDREN);
+    tracker.setLastClaimedMode(WAIT_FOR_CHILD_PARTITIONS);
 
     tracker.checkDone();
   }
@@ -120,7 +127,7 @@ public class PartitionRestrictionTrackerTest {
   @Test(expected = IllegalStateException.class)
   public void testCheckDoneWithLastClaimedModeAsWaitForParents() {
     tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
-    tracker.setLastClaimedMode(WAIT_FOR_PARENTS);
+    tracker.setLastClaimedMode(WAIT_FOR_PARENT_PARTITIONS);
 
     tracker.checkDone();
   }
@@ -179,14 +186,17 @@ public class PartitionRestrictionTrackerTest {
           (PartitionPosition position) -> assertTrue(restrictionTracker.tryClaim(position));
 
       switch (toMode) {
-        case PARTITION_QUERY:
-          assertFn.accept(PartitionPosition.continueQuery(timestamp));
+        case QUERY_CHANGE_STREAM:
+          assertFn.accept(PartitionPosition.queryChangeStream(timestamp));
           break;
-        case WAIT_FOR_CHILDREN:
-          assertFn.accept(PartitionPosition.waitForChildren());
+        case WAIT_FOR_CHILD_PARTITIONS:
+          assertFn.accept(PartitionPosition.waitForChildPartitions());
           break;
-        case WAIT_FOR_PARENTS:
-          assertFn.accept(PartitionPosition.waitForParents());
+        case FINISH_PARTITION:
+          assertFn.accept(PartitionPosition.finishPartition());
+          break;
+        case WAIT_FOR_PARENT_PARTITIONS:
+          assertFn.accept(PartitionPosition.waitForParentPartitions());
           break;
         case DELETE_PARTITION:
           assertFn.accept(PartitionPosition.deletePartition());

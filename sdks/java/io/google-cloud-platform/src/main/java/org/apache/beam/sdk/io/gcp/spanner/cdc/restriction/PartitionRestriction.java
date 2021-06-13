@@ -16,7 +16,7 @@
 
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.PARTITION_QUERY;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.QUERY_CHANGE_STREAM;
 
 import com.google.cloud.Timestamp;
 import java.io.Serializable;
@@ -31,7 +31,7 @@ public class PartitionRestriction implements Serializable {
 
   public PartitionRestriction(Timestamp startTimestamp) {
     this.startTimestamp = startTimestamp;
-    this.mode = PARTITION_QUERY;
+    this.mode = QUERY_CHANGE_STREAM;
   }
 
   public Timestamp getStartTimestamp() {

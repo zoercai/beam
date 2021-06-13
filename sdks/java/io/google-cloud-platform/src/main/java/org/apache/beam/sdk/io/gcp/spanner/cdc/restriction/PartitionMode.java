@@ -17,9 +17,10 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
 public enum PartitionMode {
-  PARTITION_QUERY,
-  WAIT_FOR_CHILDREN,
-  WAIT_FOR_PARENTS,
+  QUERY_CHANGE_STREAM,
+  WAIT_FOR_CHILD_PARTITIONS,
+  FINISH_PARTITION,
+  WAIT_FOR_PARENT_PARTITIONS,
   DELETE_PARTITION,
   DONE
 }

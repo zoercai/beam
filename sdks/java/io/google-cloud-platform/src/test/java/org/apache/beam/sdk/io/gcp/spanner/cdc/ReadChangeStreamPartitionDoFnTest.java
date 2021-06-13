@@ -150,8 +150,8 @@ public class ReadChangeStreamPartitionDoFnTest {
     );
 
     assertEquals(ProcessContinuation.stop(), result);
-    verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getCommitTimestamp()));
-    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParents());
+    verify(restrictionTracker).tryClaim(PartitionPosition.queryChangeStream(record.getCommitTimestamp()));
+    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParentPartitions());
     verify(restrictionTracker).tryClaim(PartitionPosition.deletePartition());
     verify(restrictionTracker).tryClaim(PartitionPosition.done());
     verify(outputReceiver).output(record);
@@ -189,8 +189,8 @@ public class ReadChangeStreamPartitionDoFnTest {
     );
 
     assertEquals(ProcessContinuation.stop(), result);
-    verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getTimestamp()));
-    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParents());
+    verify(restrictionTracker).tryClaim(PartitionPosition.queryChangeStream(record.getTimestamp()));
+    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParentPartitions());
     verify(restrictionTracker).tryClaim(PartitionPosition.deletePartition());
     verify(restrictionTracker).tryClaim(PartitionPosition.done());
     verify(outputReceiver, never()).output(any(DataChangesRecord.class));
@@ -235,9 +235,9 @@ public class ReadChangeStreamPartitionDoFnTest {
     );
 
     assertEquals(ProcessContinuation.stop(), result);
-    verify(restrictionTracker).tryClaim(PartitionPosition.continueQuery(record.getStartTimestamp()));
-    verify(restrictionTracker).tryClaim(PartitionPosition.waitForChildren());
-    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParents());
+    verify(restrictionTracker).tryClaim(PartitionPosition.queryChangeStream(record.getStartTimestamp()));
+    verify(restrictionTracker).tryClaim(PartitionPosition.waitForChildPartitions());
+    verify(restrictionTracker).tryClaim(PartitionPosition.waitForParentPartitions());
     verify(restrictionTracker).tryClaim(PartitionPosition.deletePartition());
     verify(outputReceiver, never()).output(any(DataChangesRecord.class));
     verify(watermarkEstimator).setWatermark(new Instant(record.getStartTimestamp().toSqlTimestamp().getTime()));

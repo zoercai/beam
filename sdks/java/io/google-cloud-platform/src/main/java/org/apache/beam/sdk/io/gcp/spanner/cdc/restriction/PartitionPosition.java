@@ -28,16 +28,20 @@ public class PartitionPosition implements Serializable {
   private final Optional<Timestamp> maybeTimestamp;
   private final PartitionMode mode;
 
-  public static PartitionPosition continueQuery(Timestamp timestamp) {
-    return new PartitionPosition(timestamp, PartitionMode.PARTITION_QUERY);
+  public static PartitionPosition queryChangeStream(Timestamp timestamp) {
+    return new PartitionPosition(timestamp, PartitionMode.QUERY_CHANGE_STREAM);
   }
 
-  public static PartitionPosition waitForChildren() {
-    return new PartitionPosition(PartitionMode.WAIT_FOR_CHILDREN);
+  public static PartitionPosition waitForChildPartitions() {
+    return new PartitionPosition(PartitionMode.WAIT_FOR_CHILD_PARTITIONS);
   }
 
-  public static PartitionPosition waitForParents() {
-    return new PartitionPosition(PartitionMode.WAIT_FOR_PARENTS);
+  public static PartitionPosition finishPartition() {
+    return new PartitionPosition(PartitionMode.FINISH_PARTITION);
+  }
+
+  public static PartitionPosition waitForParentPartitions() {
+    return new PartitionPosition(PartitionMode.WAIT_FOR_PARENT_PARTITIONS);
   }
 
   public static PartitionPosition deletePartition() {

@@ -2,9 +2,10 @@ package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DELETE_PARTITION;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DONE;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.PARTITION_QUERY;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_CHILDREN;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_PARENTS;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.FINISH_PARTITION;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.QUERY_CHANGE_STREAM;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_CHILD_PARTITIONS;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_PARENT_PARTITIONS;
 import static org.junit.Assert.*;
 
 import com.google.cloud.Timestamp;
@@ -21,26 +22,34 @@ public class PartitionPositionTest {
   }
 
   @Test
-  public void testPositionContinueQuery() {
+  public void testPositionQueryChangeStream() {
     assertEquals(
-        new PartitionPosition(timestamp, PARTITION_QUERY),
-        PartitionPosition.continueQuery(timestamp)
+        new PartitionPosition(timestamp, QUERY_CHANGE_STREAM),
+        PartitionPosition.queryChangeStream(timestamp)
     );
   }
 
   @Test
-  public void testPositionWaitForChildren() {
+  public void testPositionWaitForChildPartitions() {
     assertEquals(
-        new PartitionPosition(WAIT_FOR_CHILDREN),
-        PartitionPosition.waitForChildren()
+        new PartitionPosition(WAIT_FOR_CHILD_PARTITIONS),
+        PartitionPosition.waitForChildPartitions()
     );
   }
 
   @Test
-  public void testPositionWaitForParents() {
+  public void testPositionFinishPartition() {
     assertEquals(
-        new PartitionPosition(WAIT_FOR_PARENTS),
-        PartitionPosition.waitForParents()
+        new PartitionPosition(FINISH_PARTITION),
+        PartitionPosition.finishPartition()
+    );
+  }
+
+  @Test
+  public void testPositionWaitForParentPartitions() {
+    assertEquals(
+        new PartitionPosition(WAIT_FOR_PARENT_PARTITIONS),
+        PartitionPosition.waitForParentPartitions()
     );
   }
 

@@ -18,9 +18,10 @@ package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DELETE_PARTITION;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.DONE;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.PARTITION_QUERY;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_CHILDREN;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_PARENTS;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.FINISH_PARTITION;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.QUERY_CHANGE_STREAM;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_CHILD_PARTITIONS;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.WAIT_FOR_PARENT_PARTITIONS;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkState;
 
@@ -58,12 +59,12 @@ public class PartitionRestrictionTracker
         maybeTimestamp.orElse(null), restriction.getStartTimestamp()
     );
     checkArgument(
-        (lastClaimedMode == null && mode == PARTITION_QUERY) ||
-            (lastClaimedMode == PARTITION_QUERY && mode == PARTITION_QUERY) ||
-            (lastClaimedMode == PARTITION_QUERY && mode == WAIT_FOR_CHILDREN) ||
-            (lastClaimedMode == PARTITION_QUERY && mode == WAIT_FOR_PARENTS) ||
-            (lastClaimedMode == WAIT_FOR_CHILDREN && mode == WAIT_FOR_PARENTS) ||
-            (lastClaimedMode == WAIT_FOR_PARENTS && mode == DELETE_PARTITION) ||
+        (lastClaimedMode == null && mode == QUERY_CHANGE_STREAM) ||
+            (lastClaimedMode == QUERY_CHANGE_STREAM && mode == QUERY_CHANGE_STREAM) ||
+            (lastClaimedMode == QUERY_CHANGE_STREAM && mode == WAIT_FOR_CHILD_PARTITIONS) ||
+            (lastClaimedMode == QUERY_CHANGE_STREAM && mode == FINISH_PARTITION) ||
+            (lastClaimedMode == WAIT_FOR_CHILD_PARTITIONS && mode == FINISH_PARTITION) ||
+            (lastClaimedMode == WAIT_FOR_PARENT_PARTITIONS && mode == DELETE_PARTITION) ||
             (lastClaimedMode == DELETE_PARTITION && mode == DONE),
         "Invalid mode transition claim, from %s to %s",
         lastClaimedMode, mode
