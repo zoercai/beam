@@ -61,7 +61,7 @@ public class DataChangesRecordActionTest {
         .run(record, tracker, outputReceiver, watermarkEstimator);
 
     assertEquals(Optional.of(ProcessContinuation.stop()), maybeContinuation);
-    verify(outputReceiver, never()).output(any(DataChangesRecord.class));
-    verify(watermarkEstimator, never()).setWatermark(any(Instant.class));
+    verify(outputReceiver, never()).output(any());
+    verify(watermarkEstimator, never()).setWatermark(any());
   }
 }

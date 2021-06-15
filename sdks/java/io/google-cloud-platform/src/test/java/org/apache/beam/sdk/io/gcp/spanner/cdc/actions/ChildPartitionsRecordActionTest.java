@@ -166,7 +166,7 @@ public class ChildPartitionsRecordActionTest {
 
     assertEquals(Optional.empty(), maybeContinuation);
     verify(watermarkEstimator).setWatermark(new Instant(startTimestamp.toSqlTimestamp().getTime()));
-    verify(transaction, never()).insert(any(PartitionMetadata.class));
+    verify(transaction, never()).insert(any());
   }
 
   @Test
@@ -188,7 +188,7 @@ public class ChildPartitionsRecordActionTest {
         .run(record, partition, tracker, watermarkEstimator);
 
     assertEquals(Optional.of(ProcessContinuation.stop()), maybeContinuation);
-    verify(watermarkEstimator, never()).setWatermark(any(Instant.class));
-    verify(dao, never()).insert(any(List.class));
+    verify(watermarkEstimator, never()).setWatermark(any());
+    verify(dao, never()).insert(any());
   }
 }

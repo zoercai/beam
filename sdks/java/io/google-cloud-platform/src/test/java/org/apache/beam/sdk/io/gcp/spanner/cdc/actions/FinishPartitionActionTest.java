@@ -53,6 +53,6 @@ public class FinishPartitionActionTest {
     final Optional<ProcessContinuation> maybeContinuation = action.run(partition, tracker);
 
     assertEquals(Optional.of(ProcessContinuation.stop()), maybeContinuation);
-    verify(dao, never()).updateState(anyString(), any(PartitionMetadata.State.class));
+    verify(dao, never()).updateState(anyString(), any());
   }
 }

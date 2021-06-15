@@ -61,6 +61,6 @@ public class HeartbeatRecordActionTest {
     );
 
     assertEquals(Optional.of(ProcessContinuation.stop()), maybeContinuation);
-    verify(watermarkEstimator, never()).setWatermark(any(Instant.class));
+    verify(watermarkEstimator, never()).setWatermark(any());
   }
 }
