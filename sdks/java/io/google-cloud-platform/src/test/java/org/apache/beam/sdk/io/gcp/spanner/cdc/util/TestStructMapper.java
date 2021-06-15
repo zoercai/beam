@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.apache.beam.sdk.io.gcp.spanner.cdc;
+package org.apache.beam.sdk.io.gcp.spanner.cdc.util;
 
 import com.google.cloud.spanner.Struct;
 import com.google.cloud.spanner.Type;

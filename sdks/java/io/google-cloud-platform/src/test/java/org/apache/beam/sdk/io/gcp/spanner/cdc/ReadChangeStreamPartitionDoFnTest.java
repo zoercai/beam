@@ -1,6 +1,6 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.TestStructMapper.recordsToStruct;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.util.TestStructMapper.recordsToStruct;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.CREATED;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.FINISHED;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.SCHEDULED;
@@ -18,12 +18,10 @@ import com.google.cloud.spanner.Struct;
 import com.google.common.collect.ImmutableMap;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.function.Function;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.DaoFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao.InTransactionContext;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildPartition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ColumnType;
@@ -44,8 +42,6 @@ import org.joda.time.Instant;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
@@ -299,19 +295,4 @@ public class ReadChangeStreamPartitionDoFnTest {
   //   - No permissions for the metadata table
   // --------------------------
 
-  // TODO: Remove if not necessary
-  public static class TestTransactionAnswer implements Answer<Object> {
-
-    private final InTransactionContext transaction;
-
-    public TestTransactionAnswer(InTransactionContext transaction) {
-      this.transaction = transaction;
-    }
-
-    @Override
-    public Object answer(InvocationOnMock invocation) {
-      Function<InTransactionContext, Object> callable = invocation.getArgument(1);
-      return callable.apply(transaction);
-    }
-  }
 }

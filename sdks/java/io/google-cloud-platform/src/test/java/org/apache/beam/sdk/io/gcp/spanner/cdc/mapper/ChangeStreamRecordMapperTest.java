@@ -1,6 +1,6 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.mapper;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.TestStructMapper.recordsToStruct;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.util.TestStructMapper.recordsToStruct;
 import static org.junit.Assert.assertEquals;
 
 import com.google.cloud.Timestamp;

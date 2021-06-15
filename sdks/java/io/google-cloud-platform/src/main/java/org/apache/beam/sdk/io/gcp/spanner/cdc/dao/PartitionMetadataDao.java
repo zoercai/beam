@@ -111,6 +111,10 @@ public class PartitionMetadataDao {
       transaction.buffer(mutations);
     }
 
+    public void insert(PartitionMetadata row) {
+      this.insert(Collections.singletonList(row));
+    }
+
     public void updateState(String partitionToken, PartitionMetadata.State state) {
       final Mutation mutation = Mutation
           .newUpdateBuilder(tableName)

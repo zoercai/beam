@@ -17,8 +17,10 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.actions;
 
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.CREATED;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.FINISHED;
 
 import com.google.cloud.Timestamp;
+import java.util.Collections;
 import java.util.Optional;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
@@ -68,8 +70,23 @@ public class ChildPartitionsRecordAction {
         // TODO: Make sure this does not fail if the rows already exist
         partitionMetadataDao.insert(row);
       } else {
-        // TODO: Implement merge
-        throw new UnsupportedOperationException("Merge is unimplemented");
+        partitionMetadataDao.runInTransaction(transaction -> {
+          final long finishedParents = transaction.countPartitionsInStates(
+              childPartition.getParentTokens(),
+              Collections.singletonList(FINISHED)
+          );
+
+          if (finishedParents == childPartition.getParentTokens().size() - 1) {
+            transaction.insert(toPartitionMetadata(
+                record.getStartTimestamp(),
+                partition.getEndTimestamp(),
+                partition.getHeartbeatSeconds(),
+                childPartition
+            ));
+          }
+
+          return null;
+        });
       }
     }
 
