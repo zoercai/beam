@@ -155,6 +155,7 @@ task integrationTest(type: Test, dependsOn: processTestResources) {
   outputs.upToDateWhen { false }
 
   include '**/*IT.class'
+  include '**/**/*IT.class'
   exclude '**/BigQueryIOReadIT.class'
   exclude '**/BigQueryIOStorageQueryIT.class'
   exclude '**/BigQueryIOStorageReadIT.class'
@@ -172,11 +173,13 @@ task integrationTest(type: Test, dependsOn: processTestResources) {
 task integrationTestKms(type: Test) {
   group = "Verification"
   def gcpProject = project.findProperty('gcpProject') ?: 'apache-beam-testing'
+  def gcpSpannerInstance = project.findProperty('gcpSpannerInstance') ?: 'beam-test-instance'
   def gcpTempRoot = project.findProperty('gcpTempRootKms') ?: 'gs://temp-storage-for-end-to-end-tests-cmek'
   def dataflowKmsKey = project.findProperty('dataflowKmsKey') ?: "projects/apache-beam-testing/locations/global/keyRings/beam-it/cryptoKeys/test"
   systemProperty "beamTestPipelineOptions", JsonOutput.toJson([
           "--runner=DirectRunner",
           "--project=${gcpProject}",
+          "--instanceId=${gcpSpannerInstance}",
           "--tempRoot=${gcpTempRoot}",
           "--dataflowKmsKey=${dataflowKmsKey}",
   ])

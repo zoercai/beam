@@ -40,6 +40,7 @@ import org.apache.beam.sdk.io.gcp.spanner.SpannerTestUtils.SpannerTestPipelineOp
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.testing.TestPipeline;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -80,6 +81,12 @@ public class PipelineInitializerIT {
     op.get();
   }
 
+  @After
+  public void tearDown() {
+    databaseAdminClient.dropDatabase(options.getInstanceId(), databaseName);
+    spanner.close();
+  }
+
   @Test
   public void testInitialize() {
     DatabaseId databaseId = DatabaseId.of(project, options.getInstanceId(), databaseName);
@@ -90,10 +97,11 @@ public class PipelineInitializerIT {
         .initialize(databaseAdminClient, partitionMetadataDao, databaseId, Timestamp.MIN_VALUE,
             null);
 
-    ResultSet resultSet = databaseClient.readOnlyTransaction()
-        .executeQuery(Statement.newBuilder("SELECT * FROM " + METADATA_TABLE_NAME).build());
-    assertTrue(resultSet.next());
-    assertEquals(PARENT_PARTITION_ID, resultSet.getCurrentRowAsStruct().getString(0));
-    assertFalse(resultSet.next());
+    try (ResultSet resultSet = databaseClient.singleUse()
+        .executeQuery(Statement.newBuilder("SELECT * FROM " + METADATA_TABLE_NAME).build())) {
+      assertTrue(resultSet.next());
+      assertEquals(PARENT_PARTITION_ID, resultSet.getCurrentRowAsStruct().getString(0));
+      assertFalse(resultSet.next());
+    }
   }
 }
