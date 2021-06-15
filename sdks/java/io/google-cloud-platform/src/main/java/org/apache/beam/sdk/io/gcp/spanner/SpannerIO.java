@@ -1416,7 +1416,7 @@ public class SpannerIO {
       // FIXME: This should come from the generated table name
       final String tableName = "tableName";
       final ReadChangeStreamPartitionDoFn readChangeStreamPartitionDoFn =
-          new ReadChangeStreamPartitionDoFn(getSpannerConfig(), tableName);
+          new ReadChangeStreamPartitionDoFn(getSpannerConfig());
       return input
           .apply("Execute query", Create.of(1))
           .apply(ParDo.of(new DetectNewPartitions()))

@@ -16,31 +16,29 @@
 
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.FINISHED;
-
 import com.google.cloud.spanner.ResultSet;
-import com.google.cloud.spanner.Struct;
-import com.google.gson.Gson;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Optional;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ActionFactory;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ChildPartitionsRecordAction;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DataChangesRecordAction;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DeletePartitionAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.FinishPartitionAction;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.HeartbeatRecordAction;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.WaitForChildPartitionsAction;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.WaitForParentPartitionsAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.DaoFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.ChangeStreamRecordMapper;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.MapperFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ChildPartitionsRecordAction;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DataChangesRecordAction;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.HeartbeatRecordAction;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DeletePartitionAction;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.WaitForChildPartitionsAction;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.WaitForParentPartitionsAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionPosition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestriction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestrictionTracker;
@@ -62,7 +60,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private static final Logger LOG = LoggerFactory.getLogger(ReadChangeStreamPartitionDoFn.class);
 
   private final SpannerConfig spannerConfig;
-  private final String tableName;
   private transient ChangeStreamRecordMapper changeStreamRecordMapper;
   private transient ChangeStreamDao changeStreamDao;
   private transient PartitionMetadataDao partitionMetadataDao;
@@ -75,9 +72,8 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private transient HeartbeatRecordAction heartbeatRecordAction;
   private transient ChildPartitionsRecordAction childPartitionsRecordAction;
 
-  public ReadChangeStreamPartitionDoFn(SpannerConfig spannerConfig, String partitionMetadataTableName) {
+  public ReadChangeStreamPartitionDoFn(SpannerConfig spannerConfig) {
     this.spannerConfig = spannerConfig;
-    this.tableName = partitionMetadataTableName;
   }
 
   @GetInitialWatermarkEstimatorState
@@ -104,16 +100,16 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   public void setup() {
     this.partitionMetadataDao = DaoFactory.partitionMetadataDaoFrom(spannerConfig);
     this.changeStreamDao = DaoFactory.changeStreamDaoFrom(spannerConfig);
-    this.changeStreamRecordMapper = new ChangeStreamRecordMapper(new Gson());
+    this.changeStreamRecordMapper = MapperFactory.changeStreamRecordMapper();
 
-    this.waitForChildPartitionsAction = new WaitForChildPartitionsAction(partitionMetadataDao, Duration.millis(100));
-    this.finishPartitionAction = new FinishPartitionAction(partitionMetadataDao);
-    this.waitForParentPartitionsAction = new WaitForParentPartitionsAction(partitionMetadataDao, Duration.millis(100));
-    this.deletePartitionAction = new DeletePartitionAction(partitionMetadataDao);
+    this.waitForChildPartitionsAction = ActionFactory.waitForChildPartitionsAction(partitionMetadataDao, Duration.millis(100));
+    this.finishPartitionAction = ActionFactory.finishPartitionAction(partitionMetadataDao);
+    this.waitForParentPartitionsAction = ActionFactory.waitForParentPartitionsAction(partitionMetadataDao, Duration.millis(100));
+    this.deletePartitionAction = ActionFactory.deletePartitionAction(partitionMetadataDao);
 
-    this.dataChangesRecordAction = new DataChangesRecordAction();
-    this.heartbeatRecordAction = new HeartbeatRecordAction();
-    this.childPartitionsRecordAction = new ChildPartitionsRecordAction(partitionMetadataDao, waitForChildPartitionsAction);
+    this.dataChangesRecordAction = ActionFactory.dataChangesRecordAction();
+    this.heartbeatRecordAction = ActionFactory.heartbeatRecordAction();
+    this.childPartitionsRecordAction = ActionFactory.childPartitionsRecordAction(partitionMetadataDao, waitForChildPartitionsAction);
   }
 
   @ProcessElement
@@ -126,9 +122,12 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
     Optional<ProcessContinuation> maybeContinuation = Optional.empty();
     try (ResultSet resultSet = changeStreamDao.changeStreamQuery()) {
       while (resultSet.next()) {
-        final Struct rowAsStruct = resultSet.getCurrentRowAsStruct();
+        // TODO: Check what should we do if there is an error here
         final List<ChangeStreamRecord> records = changeStreamRecordMapper
-            .toChangeStreamRecords(partition.getPartitionToken(), rowAsStruct);
+            .toChangeStreamRecords(
+                partition.getPartitionToken(),
+                resultSet.getCurrentRowAsStruct()
+            );
 
         for (ChangeStreamRecord record : records) {
           // FIXME: We should error if the record is of an unknown type
@@ -152,6 +151,8 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
                 tracker,
                 watermarkEstimator
             );
+          } else {
+            throw new IllegalArgumentException("Unknown record type " + record.getClass());
           }
           if (maybeContinuation.isPresent()) {
             return maybeContinuation.get();
