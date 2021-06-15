@@ -32,19 +32,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import org.apache.beam.sdk.extensions.gcp.options.GcpOptions;
-import org.apache.beam.sdk.options.Default;
-import org.apache.beam.sdk.options.Description;
+import org.apache.beam.sdk.io.gcp.spanner.SpannerTestUtils.SpannerTestPipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.testing.PAssert;
 import org.apache.beam.sdk.testing.TestPipeline;
-import org.apache.beam.sdk.testing.TestPipelineOptions;
 import org.apache.beam.sdk.transforms.Count;
 import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.SerializableFunction;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionView;
 import org.apache.beam.sdk.values.TypeDescriptor;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -55,37 +52,7 @@ import org.junit.runners.JUnit4;
 /** End-to-end test of Cloud Spanner Source. */
 @RunWith(JUnit4.class)
 public class SpannerReadIT {
-
-  private static final int MAX_DB_NAME_LENGTH = 30;
-
   @Rule public final transient TestPipeline p = TestPipeline.create();
-
-  /** Pipeline options for this test. */
-  public interface SpannerTestPipelineOptions extends TestPipelineOptions {
-    @Description("Project that hosts Spanner instance")
-    @Nullable
-    String getInstanceProjectId();
-
-    void setInstanceProjectId(String value);
-
-    @Description("Instance ID to write to in Spanner")
-    @Default.String("beam-test")
-    String getInstanceId();
-
-    void setInstanceId(String value);
-
-    @Description("Database ID prefix to write to in Spanner")
-    @Default.String("beam-testdb")
-    String getDatabaseIdPrefix();
-
-    void setDatabaseIdPrefix(String value);
-
-    @Description("Table name")
-    @Default.String("users")
-    String getTable();
-
-    void setTable(String value);
-  }
 
   private Spanner spanner;
   private DatabaseAdminClient databaseAdminClient;
@@ -105,7 +72,7 @@ public class SpannerReadIT {
 
     spanner = SpannerOptions.newBuilder().setProjectId(project).build().getService();
 
-    databaseName = generateDatabaseName();
+    databaseName = SpannerTestUtils.generateDatabaseName(options.getDatabaseIdPrefix());
 
     databaseAdminClient = spanner.getDatabaseAdminClient();
 
@@ -128,7 +95,7 @@ public class SpannerReadIT {
   }
 
   @Test
-  public void testRead() throws Exception {
+  public void testRead() {
 
     SpannerConfig spannerConfig = createSpannerConfig();
 
@@ -145,12 +112,12 @@ public class SpannerReadIT {
                 .withTable(options.getTable())
                 .withColumns("Key", "Value")
                 .withTransaction(tx));
-    PAssert.thatSingleton(output.apply("Count rows", Count.<Struct>globally())).isEqualTo(5L);
+    PAssert.thatSingleton(output.apply("Count rows", Count.globally())).isEqualTo(5L);
     p.run();
   }
 
   @Test
-  public void testQuery() throws Exception {
+  public void testQuery() {
     SpannerConfig spannerConfig = createSpannerConfig();
 
     PCollectionView<Transaction> tx =
@@ -170,7 +137,7 @@ public class SpannerReadIT {
   }
 
   @Test
-  public void testReadAllRecordsInDb() throws Exception {
+  public void testReadAllRecordsInDb() {
     SpannerConfig spannerConfig = createSpannerConfig();
 
     PCollectionView<Transaction> tx =
@@ -209,7 +176,7 @@ public class SpannerReadIT {
       mutations.add(
           Mutation.newInsertOrUpdateBuilder(options.getTable())
               .set("key")
-              .to((long) i)
+              .to(i)
               .set("value")
               .to(RandomUtils.randomAlphaNumeric(100))
               .build());
@@ -230,15 +197,8 @@ public class SpannerReadIT {
   }
 
   @After
-  public void tearDown() throws Exception {
+  public void tearDown() {
     databaseAdminClient.dropDatabase(options.getInstanceId(), databaseName);
     spanner.close();
-  }
-
-  private String generateDatabaseName() {
-    String random =
-        RandomUtils.randomAlphaNumeric(
-            MAX_DB_NAME_LENGTH - 1 - options.getDatabaseIdPrefix().length());
-    return options.getDatabaseIdPrefix() + "-" + random;
   }
 }

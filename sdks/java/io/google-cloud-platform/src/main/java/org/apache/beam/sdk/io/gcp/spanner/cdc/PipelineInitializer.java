@@ -34,6 +34,7 @@ import com.google.cloud.spanner.DatabaseAdminClient;
 import com.google.cloud.spanner.DatabaseId;
 import com.google.cloud.spanner.SpannerException;
 import com.google.cloud.spanner.SpannerExceptionFactory;
+import com.google.cloud.spanner.Value;
 import com.google.common.collect.ImmutableList;
 import com.google.spanner.admin.database.v1.UpdateDatabaseDdlMetadata;
 import java.util.Collections;
@@ -49,17 +50,17 @@ public class PipelineInitializer {
   private static final ImmutableList<String> DEFAULT_PARENT_TOKENS = ImmutableList.of();
   private static final long DEFAULT_HEARTBEAT_SECONDS = 1;
 
-  public void initialize(DatabaseAdminClient databaseAdminClient,
-      PartitionMetadataDao partitionMetadataDao, DatabaseId id, String tableName, Timestamp inclusiveStartAt,
+  public static void initialize(DatabaseAdminClient databaseAdminClient,
+      PartitionMetadataDao partitionMetadataDao, DatabaseId id, Timestamp inclusiveStartAt,
       @Nullable Timestamp exclusiveEndAt) {
-    createMetadataTable(databaseAdminClient, id, tableName);
+    createMetadataTable(databaseAdminClient, id, partitionMetadataDao.getTableName());
     createFakeParentPartition(partitionMetadataDao, inclusiveStartAt, exclusiveEndAt);
   }
 
-  private void createMetadataTable(DatabaseAdminClient databaseAdminClient, DatabaseId id,
+  private static void createMetadataTable(DatabaseAdminClient databaseAdminClient, DatabaseId id,
       String tableName) {
     final String metadataCreateStmt =
-        "CREATE TABLE CDC_Partitions_" + tableName
+        "CREATE TABLE " + tableName
             + " ("
             + COLUMN_PARTITION_TOKEN + " STRING(MAX) NOT NULL,"
             + COLUMN_PARENT_TOKEN + " ARRAY<STRING(MAX)> NOT NULL,"
@@ -71,7 +72,7 @@ public class PipelineInitializer {
             + COLUMN_STATE + " STRING(MAX) NOT NULL,"
             + COLUMN_CREATED_AT + " TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),"
             + COLUMN_UPDATED_AT + " TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true)"
-            + ") PRIMARY KEY (PartitionToken);";
+            + ") PRIMARY KEY (PartitionToken)";
     OperationFuture<Void, UpdateDatabaseDdlMetadata> op =
         databaseAdminClient.updateDatabaseDdl(
             id.getInstanceId().getInstance(),
@@ -91,7 +92,7 @@ public class PipelineInitializer {
     }
   }
 
-  private void createFakeParentPartition(PartitionMetadataDao partitionMetadataDao,
+  private static void createFakeParentPartition(PartitionMetadataDao partitionMetadataDao,
       Timestamp inclusiveStartAt, @Nullable Timestamp exclusiveEndAt) {
     PartitionMetadata parentPartition = PartitionMetadata.newBuilder()
         .setPartitionToken(DEFAULT_PARENT_PARTITION_TOKEN)
@@ -100,6 +101,8 @@ public class PipelineInitializer {
         .setEndTimestamp(exclusiveEndAt)
         .setHeartbeatSeconds(DEFAULT_HEARTBEAT_SECONDS)
         .setState(State.CREATED)
+        .setCreatedAt(Value.COMMIT_TIMESTAMP)
+        .setUpdatedAt(Value.COMMIT_TIMESTAMP)
         .build();
     partitionMetadataDao.insert(parentPartition);
   }

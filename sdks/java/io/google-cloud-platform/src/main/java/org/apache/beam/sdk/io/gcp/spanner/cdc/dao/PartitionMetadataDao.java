@@ -28,6 +28,10 @@ public class PartitionMetadataDao {
     this.tableName = tableName;
   }
 
+  public String getTableName() {
+    return tableName;
+  }
+
   public Timestamp insert(PartitionMetadata partitionMetadata) {
     Mutation mutation = Mutation.newInsertBuilder(this.tableName)
         .set(COLUMN_PARTITION_TOKEN)

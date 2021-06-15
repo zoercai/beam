@@ -1413,14 +1413,12 @@ public class SpannerIO {
           .format("CDC_Partitions_%s_%s", databaseId.getDatabase(), UUID.randomUUID())
           .replaceAll("-", "_");
 
-      PipelineInitializer pipelineInitializer = new PipelineInitializer();
       PartitionMetadataDao partitionMetadataDao = new PartitionMetadataDao(databaseClient,
           partitionMetadataTableName);
-      pipelineInitializer.initialize(
+      PipelineInitializer.initialize(
           databaseAdminClient,
           partitionMetadataDao,
           databaseId,
-          partitionMetadataTableName,
           getInclusiveStartAt(),
           getExclusiveEndAt());
 
