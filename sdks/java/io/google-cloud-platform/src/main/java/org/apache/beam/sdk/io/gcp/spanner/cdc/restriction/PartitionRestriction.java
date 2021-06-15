@@ -16,8 +16,6 @@
 
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.QUERY_CHANGE_STREAM;
-
 import com.google.cloud.Timestamp;
 import java.io.Serializable;
 import java.util.Objects;
@@ -28,10 +26,15 @@ public class PartitionRestriction implements Serializable {
 
   private final Timestamp startTimestamp;
   private final PartitionMode mode;
+  private final Long childPartitionsToWaitFor;
 
-  public PartitionRestriction(Timestamp startTimestamp) {
+  public PartitionRestriction(
+      Timestamp startTimestamp,
+      PartitionMode mode,
+      Long childPartitionsToWaitFor) {
     this.startTimestamp = startTimestamp;
-    this.mode = QUERY_CHANGE_STREAM;
+    this.mode = mode;
+    this.childPartitionsToWaitFor = childPartitionsToWaitFor;
   }
 
   public Timestamp getStartTimestamp() {
@@ -40,6 +43,10 @@ public class PartitionRestriction implements Serializable {
 
   public PartitionMode getMode() {
     return mode;
+  }
+
+  public Long getChildPartitionsToWaitFor() {
+    return childPartitionsToWaitFor;
   }
 
   @Override
@@ -52,12 +59,13 @@ public class PartitionRestriction implements Serializable {
     }
     PartitionRestriction that = (PartitionRestriction) o;
     return Objects.equals(startTimestamp, that.startTimestamp) &&
-        mode == that.mode;
+        mode == that.mode &&
+        Objects.equals(childPartitionsToWaitFor, that.childPartitionsToWaitFor);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(startTimestamp, mode);
+    return Objects.hash(startTimestamp, mode, childPartitionsToWaitFor);
   }
 
   @Override
@@ -65,6 +73,7 @@ public class PartitionRestriction implements Serializable {
     return "PartitionRestriction{" +
         "startTimestamp=" + startTimestamp +
         ", mode=" + mode +
+        ", childPartitionsToWaitFor=" + childPartitionsToWaitFor +
         '}';
   }
 }

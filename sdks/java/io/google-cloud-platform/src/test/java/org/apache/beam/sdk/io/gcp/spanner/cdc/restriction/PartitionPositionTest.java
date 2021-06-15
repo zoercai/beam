@@ -9,6 +9,7 @@ import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.W
 import static org.junit.Assert.*;
 
 import com.google.cloud.Timestamp;
+import java.util.Optional;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -24,7 +25,7 @@ public class PartitionPositionTest {
   @Test
   public void testPositionQueryChangeStream() {
     assertEquals(
-        new PartitionPosition(timestamp, QUERY_CHANGE_STREAM),
+        new PartitionPosition(Optional.of(timestamp), QUERY_CHANGE_STREAM, Optional.empty()),
         PartitionPosition.queryChangeStream(timestamp)
     );
   }
@@ -32,15 +33,15 @@ public class PartitionPositionTest {
   @Test
   public void testPositionWaitForChildPartitions() {
     assertEquals(
-        new PartitionPosition(WAIT_FOR_CHILD_PARTITIONS),
-        PartitionPosition.waitForChildPartitions()
+        new PartitionPosition(Optional.empty(), WAIT_FOR_CHILD_PARTITIONS, Optional.of(20L)),
+        PartitionPosition.waitForChildPartitions(20L)
     );
   }
 
   @Test
   public void testPositionFinishPartition() {
     assertEquals(
-        new PartitionPosition(FINISH_PARTITION),
+        new PartitionPosition(Optional.empty(), FINISH_PARTITION, Optional.empty()),
         PartitionPosition.finishPartition()
     );
   }
@@ -48,7 +49,7 @@ public class PartitionPositionTest {
   @Test
   public void testPositionWaitForParentPartitions() {
     assertEquals(
-        new PartitionPosition(WAIT_FOR_PARENT_PARTITIONS),
+        new PartitionPosition(Optional.empty(), WAIT_FOR_PARENT_PARTITIONS, Optional.empty()),
         PartitionPosition.waitForParentPartitions()
     );
   }
@@ -56,7 +57,7 @@ public class PartitionPositionTest {
   @Test
   public void testPositionDeletePartition() {
     assertEquals(
-        new PartitionPosition(DELETE_PARTITION),
+        new PartitionPosition(Optional.empty(), DELETE_PARTITION, Optional.empty()),
         PartitionPosition.deletePartition()
     );
   }
@@ -64,7 +65,7 @@ public class PartitionPositionTest {
   @Test
   public void testPositionDone() {
     assertEquals(
-        new PartitionPosition(DONE),
+        new PartitionPosition(Optional.empty(), DONE, Optional.empty()),
         PartitionPosition.done()
     );
   }

@@ -25,7 +25,7 @@ public class PartitionRestrictionTrackerTest {
   @Before
   public void setUp() {
     final Timestamp startTimestamp = Timestamp.ofTimeSecondsAndNanos(10L, 20);
-    restriction = new PartitionRestriction(startTimestamp);
+    restriction = new PartitionRestriction(startTimestamp, null, null);
     tracker = new PartitionRestrictionTracker(restriction);
   }
 
@@ -80,6 +80,24 @@ public class PartitionRestrictionTrackerTest {
   @Test(expected = IllegalArgumentException.class)
   public void testTryClaimTimestampInThePastThrowsAnError() {
     tracker.tryClaim(PartitionPosition.queryChangeStream(Timestamp.ofTimeSecondsAndNanos(10L, 19)));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testTryClaimWithZeroChildPartitionsToWaitForThrowsAnError() {
+    tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
+    tracker.setLastClaimedMode(QUERY_CHANGE_STREAM);
+    tracker.setLastClaimedChildPartitionsToWaitFor(null);
+
+    tracker.tryClaim(PartitionPosition.waitForChildPartitions(0));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testTryClaimWithNegativeChildPartitionsToWaitForThrowsAnError() {
+    tracker.setLastClaimedTimestamp(Timestamp.ofTimeSecondsAndNanos(10L, 20));
+    tracker.setLastClaimedMode(QUERY_CHANGE_STREAM);
+    tracker.setLastClaimedChildPartitionsToWaitFor(null);
+
+    tracker.tryClaim(PartitionPosition.waitForChildPartitions(-1));
   }
 
   @Test
@@ -190,7 +208,7 @@ public class PartitionRestrictionTrackerTest {
           assertFn.accept(PartitionPosition.queryChangeStream(timestamp));
           break;
         case WAIT_FOR_CHILD_PARTITIONS:
-          assertFn.accept(PartitionPosition.waitForChildPartitions());
+          assertFn.accept(PartitionPosition.waitForChildPartitions(10L));
           break;
         case FINISH_PARTITION:
           assertFn.accept(PartitionPosition.finishPartition());

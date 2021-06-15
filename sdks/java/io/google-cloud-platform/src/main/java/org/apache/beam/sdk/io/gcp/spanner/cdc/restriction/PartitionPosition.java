@@ -27,40 +27,58 @@ public class PartitionPosition implements Serializable {
   private static final long serialVersionUID = -9088898012221404492L;
   private final Optional<Timestamp> maybeTimestamp;
   private final PartitionMode mode;
+  private final Optional<Long> maybeChildPartitionsToWaitFor;
 
   public static PartitionPosition queryChangeStream(Timestamp timestamp) {
-    return new PartitionPosition(timestamp, PartitionMode.QUERY_CHANGE_STREAM);
+    return new PartitionPosition(
+        Optional.of(timestamp),
+        PartitionMode.QUERY_CHANGE_STREAM,
+        Optional.empty());
   }
 
-  public static PartitionPosition waitForChildPartitions() {
-    return new PartitionPosition(PartitionMode.WAIT_FOR_CHILD_PARTITIONS);
+  public static PartitionPosition waitForChildPartitions(long childPartitionsToWaitFor) {
+    return new PartitionPosition(
+        Optional.empty(),
+        PartitionMode.WAIT_FOR_CHILD_PARTITIONS,
+        Optional.of(childPartitionsToWaitFor));
   }
 
   public static PartitionPosition finishPartition() {
-    return new PartitionPosition(PartitionMode.FINISH_PARTITION);
+    return new PartitionPosition(
+        Optional.empty(),
+        PartitionMode.FINISH_PARTITION,
+        Optional.empty());
   }
 
   public static PartitionPosition waitForParentPartitions() {
-    return new PartitionPosition(PartitionMode.WAIT_FOR_PARENT_PARTITIONS);
+    return new PartitionPosition(
+        Optional.empty(),
+        PartitionMode.WAIT_FOR_PARENT_PARTITIONS,
+        Optional.empty());
   }
 
   public static PartitionPosition deletePartition() {
-    return new PartitionPosition(PartitionMode.DELETE_PARTITION);
+    return new PartitionPosition(
+        Optional.empty(),
+        PartitionMode.DELETE_PARTITION,
+        Optional.empty());
   }
 
   public static PartitionPosition done() {
-    return new PartitionPosition(PartitionMode.DONE);
+    return new PartitionPosition(
+        Optional.empty(),
+        PartitionMode.DONE,
+        Optional.empty());
   }
 
   @VisibleForTesting
-  protected PartitionPosition(Timestamp timestamp, PartitionMode mode) {
-    this.maybeTimestamp = Optional.ofNullable(timestamp);
+  protected PartitionPosition(
+      Optional<Timestamp> maybeTimestamp,
+      PartitionMode mode,
+      Optional<Long> maybeChildPartitionsToWaitFor) {
+    this.maybeTimestamp = maybeTimestamp;
     this.mode = mode;
-  }
-
-  @VisibleForTesting
-  protected PartitionPosition(PartitionMode mode) {
-    this(null, mode);
+    this.maybeChildPartitionsToWaitFor = maybeChildPartitionsToWaitFor;
   }
 
   public Optional<Timestamp> getTimestamp() {
@@ -69,6 +87,10 @@ public class PartitionPosition implements Serializable {
 
   public PartitionMode getMode() {
     return mode;
+  }
+
+  public Optional<Long> getChildPartitionsToWaitFor() {
+    return maybeChildPartitionsToWaitFor;
   }
 
   @Override
@@ -81,12 +103,13 @@ public class PartitionPosition implements Serializable {
     }
     PartitionPosition that = (PartitionPosition) o;
     return Objects.equals(maybeTimestamp, that.maybeTimestamp) &&
-        mode == that.mode;
+        mode == that.mode &&
+        Objects.equals(maybeChildPartitionsToWaitFor, that.maybeChildPartitionsToWaitFor);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(maybeTimestamp, mode);
+    return Objects.hash(maybeTimestamp, mode, maybeChildPartitionsToWaitFor);
   }
 
   @Override
@@ -94,6 +117,7 @@ public class PartitionPosition implements Serializable {
     return "PartitionPosition{" +
         "maybeTimestamp=" + maybeTimestamp +
         ", mode=" + mode +
+        ", maybeChildPartitionsToWaitFor=" + maybeChildPartitionsToWaitFor +
         '}';
   }
 }

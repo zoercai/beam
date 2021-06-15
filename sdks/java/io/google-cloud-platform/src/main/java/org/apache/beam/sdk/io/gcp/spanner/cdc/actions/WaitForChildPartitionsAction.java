@@ -44,9 +44,9 @@ public class WaitForChildPartitionsAction {
   public Optional<ProcessContinuation> run(
       PartitionMetadata partition,
       RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
-      long numberOfChildPartitionsToWaitFor
+      long childPartitionsToWaitFor
   ) {
-    if (!tracker.tryClaim(PartitionPosition.waitForChildPartitions())) {
+    if (!tracker.tryClaim(PartitionPosition.waitForChildPartitions(childPartitionsToWaitFor))) {
       return Optional.of(ProcessContinuation.stop());
     }
     long numberOfFinishedChildren = partitionMetadataDao.countChildPartitionsInStates(
@@ -54,7 +54,7 @@ public class WaitForChildPartitionsAction {
         Arrays.asList(SCHEDULED, FINISHED)
     );
     // TODO: number of child partition should probably be added into the restriction
-    if (numberOfFinishedChildren < numberOfChildPartitionsToWaitFor) {
+    if (numberOfFinishedChildren < childPartitionsToWaitFor) {
       return Optional.of(ProcessContinuation.resume().withResumeDelay(resumeDuration));
     }
 

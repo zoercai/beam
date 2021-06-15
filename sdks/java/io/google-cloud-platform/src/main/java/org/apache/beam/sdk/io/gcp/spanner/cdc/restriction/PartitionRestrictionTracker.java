@@ -39,6 +39,7 @@ public class PartitionRestrictionTracker
   private final PartitionRestriction restriction;
   private @Nullable Timestamp lastClaimedTimestamp;
   private @Nullable PartitionMode lastClaimedMode;
+  private @Nullable Long lastClaimedChildPartitionsToWaitFor;
 
   public PartitionRestrictionTracker(PartitionRestriction restriction) {
     this.restriction = restriction;
@@ -48,13 +49,16 @@ public class PartitionRestrictionTracker
   public boolean tryClaim(PartitionPosition position) {
     final Optional<Timestamp> maybeTimestamp = position.getTimestamp();
     final PartitionMode mode = position.getMode();
+    final Optional<Long> maybeChildPartitionsToWaitFor = position.getChildPartitionsToWaitFor();
     checkArgument(
         lastClaimedTimestamp == null || maybeTimestamp.map(t -> t.compareTo(lastClaimedTimestamp) >= 0).orElse(true),
         "Trying to claim timestamp %s while last claimed was %s.",
         position, lastClaimedTimestamp
     );
     checkArgument(
-        maybeTimestamp.map(t -> t.compareTo(restriction.getStartTimestamp()) >= 0).orElse(true),
+        maybeTimestamp
+            .map(timestamp -> timestamp.compareTo(restriction.getStartTimestamp()) >= 0)
+            .orElse(true),
         "Trying to claim timestamp %s before start timestamp %s.",
         maybeTimestamp.orElse(null), restriction.getStartTimestamp()
     );
@@ -69,14 +73,31 @@ public class PartitionRestrictionTracker
         "Invalid mode transition claim, from %s to %s",
         lastClaimedMode, mode
     );
+    checkArgument(
+        maybeChildPartitionsToWaitFor
+            .map(ignored -> mode == WAIT_FOR_CHILD_PARTITIONS)
+            .orElse(true),
+        "Trying to claim restriction with children to wait for, not in the %s mode.",
+        WAIT_FOR_CHILD_PARTITIONS.toString()
+    );
+    checkArgument(
+        maybeChildPartitionsToWaitFor
+            .map(childPartitionsToWaitFor -> childPartitionsToWaitFor > 0)
+            .orElse(true),
+        "Invalid number for children to wait for " + maybeChildPartitionsToWaitFor.get() + ", it must be greater than 0."
+    );
     maybeTimestamp.ifPresent(this::setLastClaimedTimestamp);
     setLastClaimedMode(mode);
+    maybeChildPartitionsToWaitFor.ifPresent(this::setLastClaimedChildPartitionsToWaitFor);
     return true;
   }
 
   @Override
   public PartitionRestriction currentRestriction() {
-    return restriction;
+    return new PartitionRestriction(
+        lastClaimedTimestamp,
+        lastClaimedMode,
+        lastClaimedChildPartitionsToWaitFor);
   }
 
   @Override
@@ -118,5 +139,10 @@ public class PartitionRestrictionTracker
   @VisibleForTesting
   protected void setLastClaimedMode(PartitionMode mode) {
     this.lastClaimedMode = mode;
+  }
+
+  @VisibleForTesting
+  protected void setLastClaimedChildPartitionsToWaitFor(Long childPartitionsToWaitFor) {
+    this.lastClaimedChildPartitionsToWaitFor = childPartitionsToWaitFor;
   }
 }

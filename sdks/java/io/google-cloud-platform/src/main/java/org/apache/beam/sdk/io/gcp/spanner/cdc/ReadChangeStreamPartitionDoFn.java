@@ -39,6 +39,7 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionPosition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestriction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestrictionTracker;
@@ -62,7 +63,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private final SpannerConfig spannerConfig;
   private transient ChangeStreamRecordMapper changeStreamRecordMapper;
   private transient ChangeStreamDao changeStreamDao;
-  private transient PartitionMetadataDao partitionMetadataDao;
 
   private transient WaitForChildPartitionsAction waitForChildPartitionsAction;
   private transient FinishPartitionAction finishPartitionAction;
@@ -88,7 +88,10 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
   @GetInitialRestriction
   public PartitionRestriction initialRestriction(@Element PartitionMetadata element) {
-    return new PartitionRestriction(element.getStartTimestamp());
+    return new PartitionRestriction(
+        element.getStartTimestamp(),
+        PartitionMode.QUERY_CHANGE_STREAM,
+        null);
   }
 
   @NewTracker
@@ -98,7 +101,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
   @Setup
   public void setup() {
-    this.partitionMetadataDao = DaoFactory.partitionMetadataDaoFrom(spannerConfig);
+    final PartitionMetadataDao partitionMetadataDao = DaoFactory.partitionMetadataDaoFrom(spannerConfig);
     this.changeStreamDao = DaoFactory.changeStreamDaoFrom(spannerConfig);
     this.changeStreamRecordMapper = MapperFactory.changeStreamRecordMapper();
 
@@ -119,7 +122,32 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       OutputReceiver<DataChangesRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
-    Optional<ProcessContinuation> maybeContinuation = Optional.empty();
+    switch (tracker.currentRestriction().getMode()) {
+      case QUERY_CHANGE_STREAM:
+        return queryChangeStream(partition, tracker, receiver, watermarkEstimator);
+      case WAIT_FOR_CHILD_PARTITIONS:
+        return waitForChildPartitions(partition, tracker);
+      case FINISH_PARTITION:
+        return finishPartition(partition, tracker);
+      case WAIT_FOR_PARENT_PARTITIONS:
+        return waitForParentPartitions(partition, tracker);
+      case DELETE_PARTITION:
+        return deletePartition(partition, tracker);
+      case DONE:
+        return done(tracker);
+      default:
+        // TODO: Verify what to do here
+        throw new IllegalArgumentException("Unknown mode " + tracker.currentRestriction().getMode());
+    }
+  }
+
+  private ProcessContinuation queryChangeStream(
+      PartitionMetadata partition,
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
+      OutputReceiver<DataChangesRecord> receiver,
+      ManualWatermarkEstimator<Instant> watermarkEstimator
+  ) {
+    Optional<ProcessContinuation> maybeContinuation;
     try (ResultSet resultSet = changeStreamDao.changeStreamQuery()) {
       while (resultSet.next()) {
         // TODO: Check what should we do if there is an error here
@@ -130,7 +158,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
             );
 
         for (ChangeStreamRecord record : records) {
-          // FIXME: We should error if the record is of an unknown type
           if (record instanceof DataChangesRecord) {
             maybeContinuation = dataChangesRecordAction.run(
                 (DataChangesRecord) record,
@@ -152,6 +179,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
                 watermarkEstimator
             );
           } else {
+            // FIXME: Check what should we do if the record is unknown
             throw new IllegalArgumentException("Unknown record type " + record.getClass());
           }
           if (maybeContinuation.isPresent()) {
@@ -160,17 +188,52 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
         }
       }
 
-      maybeContinuation = finishPartitionAction.run(partition, tracker);
-      if (maybeContinuation.isPresent()) return maybeContinuation.get();
-
-      maybeContinuation = waitForParentPartitionsAction.run(partition, tracker);
-      if (maybeContinuation.isPresent()) return maybeContinuation.get();
-
-      maybeContinuation = deletePartitionAction.run(partition, tracker);
-      if (maybeContinuation.isPresent()) return maybeContinuation.get();
-
-      tracker.tryClaim(PartitionPosition.done());
-      return ProcessContinuation.stop();
+      return finishPartition(partition, tracker);
     }
+  }
+
+  private ProcessContinuation waitForChildPartitions(
+      PartitionMetadata partition,
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker
+  ) {
+    final Long childPartitionsToWaitFor = tracker
+        .currentRestriction()
+        .getChildPartitionsToWaitFor();
+    return waitForChildPartitionsAction
+        .run(partition, tracker, childPartitionsToWaitFor)
+        .orElseGet(() -> finishPartition(partition, tracker));
+  }
+
+  private ProcessContinuation finishPartition(
+      PartitionMetadata partition,
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker
+  ) {
+    return finishPartitionAction
+        .run(partition, tracker)
+        .orElseGet(() -> waitForParentPartitions(partition, tracker));
+  }
+
+  private ProcessContinuation waitForParentPartitions(
+      PartitionMetadata partition,
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker) {
+    return waitForParentPartitionsAction
+        .run(partition, tracker)
+        .orElseGet(() -> deletePartition(partition, tracker));
+
+  }
+
+  private ProcessContinuation deletePartition(
+      PartitionMetadata partition,
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker) {
+    return deletePartitionAction
+        .run(partition, tracker)
+        .orElseGet(() -> done(tracker));
+
+  }
+
+  private ProcessContinuation done(
+      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker) {
+    tracker.tryClaim(PartitionPosition.done());
+    return ProcessContinuation.stop();
   }
 }
