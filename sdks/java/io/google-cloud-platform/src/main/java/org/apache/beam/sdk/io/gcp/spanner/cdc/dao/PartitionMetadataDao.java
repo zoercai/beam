@@ -5,6 +5,7 @@ import com.google.cloud.spanner.DatabaseClient;
 import com.google.cloud.spanner.Mutation;
 import com.google.cloud.spanner.TransactionContext;
 import com.google.common.collect.ImmutableList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -53,6 +54,10 @@ public class PartitionMetadataDao {
   // TODO: Implement
   public void updateState(String partitionToken, PartitionMetadata.State state) {
     throw new UnsupportedOperationException("Unimplemented");
+  }
+
+  public void insert(PartitionMetadata row) {
+    this.insert(Collections.singletonList(row));
   }
 
   public void insert(List<PartitionMetadata> rows) {

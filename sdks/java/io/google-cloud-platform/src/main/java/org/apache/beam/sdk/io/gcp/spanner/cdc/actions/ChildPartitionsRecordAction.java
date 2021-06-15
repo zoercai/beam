@@ -19,9 +19,7 @@ package org.apache.beam.sdk.io.gcp.spanner.cdc.actions;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State.CREATED;
 
 import com.google.cloud.Timestamp;
-import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildPartition;
@@ -57,24 +55,23 @@ public class ChildPartitionsRecordAction {
     }
     watermarkEstimator.setWatermark(new Instant(startTimestamp.toSqlTimestamp().getTime()));
 
-    if (isSplitOrMove(record)) {
-      return processChildPartitionSplit(record, partition, tracker);
-    } else {
-      // TODO: Implement merge
-      throw new UnsupportedOperationException("Merge is unimplemented");
+    for (ChildPartition childPartition : record.getChildPartitions()) {
+      if (isSplit(childPartition)) {
+        final PartitionMetadata row = toPartitionMetadata(
+            record.getStartTimestamp(),
+            partition.getEndTimestamp(),
+            partition.getHeartbeatSeconds(),
+            childPartition
+        );
+        // Updates the metadata table
+        // FIXME: Figure out what to do if this throws an exception
+        // TODO: Make sure this does not fail if the rows already exist
+        partitionMetadataDao.insert(row);
+      } else {
+        // TODO: Implement merge
+        throw new UnsupportedOperationException("Merge is unimplemented");
+      }
     }
-  }
-
-  private Optional<ProcessContinuation> processChildPartitionSplit(
-      ChildPartitionsRecord record,
-      PartitionMetadata partition,
-      RestrictionTracker<PartitionRestriction, PartitionPosition> tracker
-  ) {
-    // Updates the metadata table
-    // FIXME: We will need to batch the records here
-    // FIXME: Figure out what to do if this throws an exception
-    final List<PartitionMetadata> newChildPartitions = partitionMetadataRowsFrom(record, partition);
-    partitionMetadataDao.insert(newChildPartitions);
 
     return waitForChildPartitionsAction.run(
         partition,
@@ -83,24 +80,8 @@ public class ChildPartitionsRecordAction {
     );
   }
 
-  // TODO: Confirm the assumption that within a child partitions record it could either be a split or a merge, but not both
-  private boolean isSplitOrMove(ChildPartitionsRecord record) {
-    return record.getChildPartitions().get(0).getParentTokens().size() == 1;
-  }
-
-  private List<PartitionMetadata> partitionMetadataRowsFrom(
-      ChildPartitionsRecord record,
-      PartitionMetadata parentPartition) {
-    return record
-        .getChildPartitions()
-        .stream()
-        .map(childPartition -> toPartitionMetadata(
-            record.getStartTimestamp(),
-            parentPartition.getEndTimestamp(),
-            parentPartition.getHeartbeatSeconds(),
-            childPartition
-        ))
-        .collect(Collectors.toList());
+  private boolean isSplit(ChildPartition childPartition) {
+    return childPartition.getParentTokens().size() == 1;
   }
 
   private PartitionMetadata toPartitionMetadata(

@@ -68,7 +68,7 @@ public class ChildPartitionsRecordActionTest {
 
     assertEquals(Optional.empty(), maybeContinuation);
     verify(watermarkEstimator).setWatermark(new Instant(startTimestamp.toSqlTimestamp().getTime()));
-    verify(dao).insert(Arrays.asList(
+    verify(dao).insert(
         PartitionMetadata.newBuilder()
             .setPartitionToken("childPartition1")
             .setParentTokens(Collections.singletonList(partitionToken))
@@ -78,7 +78,9 @@ public class ChildPartitionsRecordActionTest {
             .setInclusiveEnd(false)
             .setHeartbeatSeconds(heartbeat)
             .setState(CREATED)
-            .build(),
+            .build()
+    );
+    verify(dao).insert(
         PartitionMetadata.newBuilder()
             .setPartitionToken("childPartition2")
             .setParentTokens(Collections.singletonList(partitionToken))
@@ -89,7 +91,7 @@ public class ChildPartitionsRecordActionTest {
             .setHeartbeatSeconds(heartbeat)
             .setState(CREATED)
             .build()
-    ));
+    );
   }
 
   @Test
