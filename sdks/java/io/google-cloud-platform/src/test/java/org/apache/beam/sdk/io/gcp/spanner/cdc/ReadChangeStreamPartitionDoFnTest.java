@@ -13,6 +13,7 @@ import static org.powermock.api.mockito.PowerMockito.mockStatic;
 import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.ResultSet;
 import com.google.cloud.spanner.Struct;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
@@ -128,20 +129,24 @@ public class ReadChangeStreamPartitionDoFnTest {
   public void testDataChangeRecord() {
     final Struct rowAsStruct = mock(Struct.class);
     final ResultSet resultSet = mock(ResultSet.class);
-    final DataChangesRecord record = mock(DataChangesRecord.class);
+    final DataChangesRecord record1 = mock(DataChangesRecord.class);
+    final DataChangesRecord record2 = mock(DataChangesRecord.class);
     when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(rowAsStruct);
     when(changeStreamRecordMapper.toChangeStreamRecords(PARTITION_TOKEN, rowAsStruct))
-        .thenReturn(Collections.singletonList(record));
-    when(dataChangesRecordAction.run(record, restrictionTracker, outputReceiver, watermarkEstimator))
+        .thenReturn(Arrays.asList(record1, record2));
+    when(dataChangesRecordAction.run(record1, restrictionTracker, outputReceiver, watermarkEstimator))
+        .thenReturn(Optional.empty());
+    when(dataChangesRecordAction.run(record2, restrictionTracker, outputReceiver, watermarkEstimator))
         .thenReturn(Optional.of(ProcessContinuation.stop()));
 
     final ProcessContinuation result = doFn
         .processElement(partition, restrictionTracker, outputReceiver, watermarkEstimator);
 
     assertEquals(ProcessContinuation.stop(), result);
-    verify(dataChangesRecordAction).run(record, restrictionTracker, outputReceiver, watermarkEstimator);
+    verify(dataChangesRecordAction).run(record1, restrictionTracker, outputReceiver, watermarkEstimator);
+    verify(dataChangesRecordAction).run(record2, restrictionTracker, outputReceiver, watermarkEstimator);
 
     verify(heartbeatRecordAction, never()).run(any(), any(), any());
     verify(childPartitionsRecordAction, never()).run(any(), any(), any(), any());
@@ -156,20 +161,24 @@ public class ReadChangeStreamPartitionDoFnTest {
   public void testHeartbeatRecord() {
     final Struct rowAsStruct = mock(Struct.class);
     final ResultSet resultSet = mock(ResultSet.class);
-    final HeartbeatRecord record = mock(HeartbeatRecord.class);
+    final HeartbeatRecord record1 = mock(HeartbeatRecord.class);
+    final HeartbeatRecord record2 = mock(HeartbeatRecord.class);
     when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(rowAsStruct);
     when(changeStreamRecordMapper.toChangeStreamRecords(PARTITION_TOKEN, rowAsStruct))
-        .thenReturn(Collections.singletonList(record));
-    when(heartbeatRecordAction.run(record, restrictionTracker, watermarkEstimator))
+        .thenReturn(Arrays.asList(record1, record2));
+    when(heartbeatRecordAction.run(record1, restrictionTracker, watermarkEstimator))
+        .thenReturn(Optional.empty());
+    when(heartbeatRecordAction.run(record2, restrictionTracker, watermarkEstimator))
         .thenReturn(Optional.of(ProcessContinuation.stop()));
 
     final ProcessContinuation result = doFn
         .processElement(partition, restrictionTracker, outputReceiver, watermarkEstimator);
 
     assertEquals(ProcessContinuation.stop(), result);
-    verify(heartbeatRecordAction).run(record, restrictionTracker, watermarkEstimator);
+    verify(heartbeatRecordAction).run(record1, restrictionTracker, watermarkEstimator);
+    verify(heartbeatRecordAction).run(record2, restrictionTracker, watermarkEstimator);
 
     verify(dataChangesRecordAction, never()).run(any(), any(), any(), any());
     verify(childPartitionsRecordAction, never()).run(any(), any(), any(), any());
@@ -184,20 +193,24 @@ public class ReadChangeStreamPartitionDoFnTest {
   public void testChildPartitionsRecord() {
     final Struct rowAsStruct = mock(Struct.class);
     final ResultSet resultSet = mock(ResultSet.class);
-    final ChildPartitionsRecord record = mock(ChildPartitionsRecord.class);
+    final ChildPartitionsRecord record1 = mock(ChildPartitionsRecord.class);
+    final ChildPartitionsRecord record2 = mock(ChildPartitionsRecord.class);
     when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(rowAsStruct);
     when(changeStreamRecordMapper.toChangeStreamRecords(PARTITION_TOKEN, rowAsStruct))
-        .thenReturn(Collections.singletonList(record));
-    when(childPartitionsRecordAction.run(record, partition, restrictionTracker, watermarkEstimator))
-        .thenReturn(Optional.of(ProcessContinuation.stop()));
+        .thenReturn(Arrays.asList(record1, record2));
+    when(childPartitionsRecordAction.run(record1, partition, restrictionTracker, watermarkEstimator))
+        .thenReturn(Optional.empty());
+    when(childPartitionsRecordAction.run(record2, partition, restrictionTracker, watermarkEstimator))
+        .thenReturn(Optional.of(ProcessContinuation.resume()));
 
     final ProcessContinuation result = doFn
         .processElement(partition, restrictionTracker, outputReceiver, watermarkEstimator);
 
-    assertEquals(ProcessContinuation.stop(), result);
-    verify(childPartitionsRecordAction).run(record, partition, restrictionTracker, watermarkEstimator);
+    assertEquals(ProcessContinuation.resume(), result);
+    verify(childPartitionsRecordAction).run(record1, partition, restrictionTracker, watermarkEstimator);
+    verify(childPartitionsRecordAction).run(record2, partition, restrictionTracker, watermarkEstimator);
 
     verify(dataChangesRecordAction, never()).run(any(), any(), any(), any());
     verify(heartbeatRecordAction, never()).run(any(), any(), any());
