@@ -140,6 +140,36 @@ public class ChildPartitionsRecordActionTest {
   }
 
   @Test
+  public void testRestrictionClaimedAndIsMergeCaseAndAtLeastOneParentIsNotFinished() {
+    final String partitionToken = "partitionToken";
+    final String anotherPartitionToken = "anotherPartitionToken";
+    final List<String> parentTokens = Arrays.asList(partitionToken, anotherPartitionToken);
+    final long heartbeat = 30L;
+    final Timestamp startTimestamp = Timestamp.ofTimeSecondsAndNanos(10L, 20);
+    final Timestamp endTimestamp = Timestamp.ofTimeSecondsAndNanos(30L, 40);
+    final PartitionMetadata partition = mock(PartitionMetadata.class);
+    final ChildPartitionsRecord record = new ChildPartitionsRecord(
+        startTimestamp,
+        "recordSequence",
+        Collections.singletonList(new ChildPartition("childPartition1", parentTokens))
+    );
+    final InTransactionContext transaction = mock(InTransactionContext.class);
+    when(partition.getEndTimestamp()).thenReturn(endTimestamp);
+    when(partition.getHeartbeatSeconds()).thenReturn(heartbeat);
+    when(tracker.tryClaim(PartitionPosition.queryChangeStream(startTimestamp))).thenReturn(true);
+    when(dao.runInTransaction(any(Function.class))).thenAnswer(new TestTransactionAnswer(transaction));
+    when(transaction.countPartitionsInStates(parentTokens, Collections.singletonList(FINISHED))).thenReturn(0L);
+    when(waitForChildPartitionsAction.run(partition, tracker, 1)).thenReturn(Optional.empty());
+
+    final Optional<ProcessContinuation> maybeContinuation = action
+        .run(record, partition, tracker, watermarkEstimator);
+
+    assertEquals(Optional.empty(), maybeContinuation);
+    verify(watermarkEstimator).setWatermark(new Instant(startTimestamp.toSqlTimestamp().getTime()));
+    verify(transaction, never()).insert(any(PartitionMetadata.class));
+  }
+
+  @Test
   public void testRestrictionNotClaimed() {
     final String partitionToken = "partitionToken";
     final Timestamp startTimestamp = Timestamp.ofTimeSecondsAndNanos(10L, 20);
