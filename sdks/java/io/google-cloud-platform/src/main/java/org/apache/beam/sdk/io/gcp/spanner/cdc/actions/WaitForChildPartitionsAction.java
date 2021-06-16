@@ -53,7 +53,6 @@ public class WaitForChildPartitionsAction {
         partition.getPartitionToken(),
         Arrays.asList(SCHEDULED, FINISHED)
     );
-    // TODO: number of child partition should probably be added into the restriction
     if (numberOfFinishedChildren < childPartitionsToWaitFor) {
       return Optional.of(ProcessContinuation.resume().withResumeDelay(resumeDuration));
     }
