@@ -19,6 +19,7 @@ package org.apache.beam.sdk.io.gcp.spanner;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.beam.sdk.io.gcp.spanner.MutationUtils.isPointDelete;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.NameGenerator.generateMetadataTableName;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
@@ -49,7 +50,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.OptionalInt;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.apache.beam.sdk.annotations.Experimental;
 import org.apache.beam.sdk.annotations.Experimental.Kind;
@@ -1409,9 +1409,7 @@ public class SpannerIO {
           getSpannerConfig().getProjectId().get(),
           getSpannerConfig().getInstanceId().get(),
           getSpannerConfig().getDatabaseId().get());
-      String partitionMetadataTableName = String
-          .format("CDC_Partitions_%s_%s", databaseId.getDatabase(), UUID.randomUUID())
-          .replaceAll("-", "_");
+      String partitionMetadataTableName = generateMetadataTableName(databaseId.getDatabase());
 
       PartitionMetadataDao partitionMetadataDao = new PartitionMetadataDao(databaseClient,
           partitionMetadataTableName);

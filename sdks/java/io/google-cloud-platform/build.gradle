@@ -155,7 +155,6 @@ task integrationTest(type: Test, dependsOn: processTestResources) {
   outputs.upToDateWhen { false }
 
   include '**/*IT.class'
-  include '**/**/*IT.class'
   exclude '**/BigQueryIOReadIT.class'
   exclude '**/BigQueryIOStorageQueryIT.class'
   exclude '**/BigQueryIOStorageReadIT.class'

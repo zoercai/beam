@@ -31,7 +31,7 @@ public class ColumnType implements Serializable {
   private String name;
   private TypeCode type;
   private boolean isPrimaryKey;
-  private int ordinalPosition;
+  private long ordinalPosition;
 
   /**
    * Default constructor for serialization only.
@@ -42,7 +42,7 @@ public class ColumnType implements Serializable {
   public ColumnType(String name,
       TypeCode type,
       boolean isPrimaryKey,
-      int ordinalPosition) {
+      long ordinalPosition) {
     this.name = name;
     this.type = type;
     this.isPrimaryKey = isPrimaryKey;
@@ -73,7 +73,7 @@ public class ColumnType implements Serializable {
     isPrimaryKey = primaryKey;
   }
 
-  public int getOrdinalPosition() {
+  public long getOrdinalPosition() {
     return ordinalPosition;
   }
 
