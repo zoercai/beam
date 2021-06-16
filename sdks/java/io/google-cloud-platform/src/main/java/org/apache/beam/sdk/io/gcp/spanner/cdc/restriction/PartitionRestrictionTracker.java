@@ -32,11 +32,10 @@ import org.apache.beam.sdk.transforms.splittabledofn.SplitResult;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.VisibleForTesting;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-// TODO: Add unit tests
 public class PartitionRestrictionTracker
     extends RestrictionTracker<PartitionRestriction, PartitionPosition> {
 
-  private final PartitionRestriction restriction;
+  private PartitionRestriction restriction;
   private @Nullable Timestamp lastClaimedTimestamp;
   private @Nullable PartitionMode lastClaimedMode;
   private @Nullable Long lastClaimedChildPartitionsToWaitFor;
@@ -84,20 +83,22 @@ public class PartitionRestrictionTracker
         maybeChildPartitionsToWaitFor
             .map(childPartitionsToWaitFor -> childPartitionsToWaitFor > 0)
             .orElse(true),
-        "Invalid number for children to wait for " + maybeChildPartitionsToWaitFor.get() + ", it must be greater than 0."
+        "Invalid number for children to wait for " + maybeChildPartitionsToWaitFor.orElse(-1L) + ", it must be greater than 0."
     );
     maybeTimestamp.ifPresent(this::setLastClaimedTimestamp);
     setLastClaimedMode(mode);
     maybeChildPartitionsToWaitFor.ifPresent(this::setLastClaimedChildPartitionsToWaitFor);
+    this.restriction = new PartitionRestriction(
+        maybeTimestamp.orElse(lastClaimedTimestamp),
+        mode,
+        maybeChildPartitionsToWaitFor.orElse(lastClaimedChildPartitionsToWaitFor)
+    );
     return true;
   }
 
   @Override
   public PartitionRestriction currentRestriction() {
-    return new PartitionRestriction(
-        lastClaimedTimestamp,
-        lastClaimedMode,
-        lastClaimedChildPartitionsToWaitFor);
+    return restriction;
   }
 
   @Override

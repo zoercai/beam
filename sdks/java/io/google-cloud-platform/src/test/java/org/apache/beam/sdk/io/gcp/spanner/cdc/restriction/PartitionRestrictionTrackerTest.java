@@ -166,15 +166,17 @@ public class PartitionRestrictionTrackerTest {
   private static class TryClaimTestScenario {
 
     private final PartitionRestrictionTracker restrictionTracker;
-    private final Timestamp timestamp;
+    private final Timestamp defaultTimestamp;
+    private final Long defaultChildPartitionsToWaitFor;
     public PartitionMode fromMode;
     public PartitionMode toMode;
 
     private TryClaimTestScenario(
         PartitionRestrictionTracker restrictionTracker,
-        Timestamp timestamp) {
+        Timestamp defaultTimestamp) {
       this.restrictionTracker = restrictionTracker;
-      this.timestamp = timestamp;
+      this.defaultTimestamp = defaultTimestamp;
+      this.defaultChildPartitionsToWaitFor = 0L;
     }
 
     public TryClaimTestScenario from(PartitionMode from) {
@@ -196,16 +198,32 @@ public class PartitionRestrictionTrackerTest {
     }
 
     private void run(boolean errorExpected) {
-      restrictionTracker.setLastClaimedTimestamp(timestamp);
+      restrictionTracker.setLastClaimedTimestamp(defaultTimestamp);
       restrictionTracker.setLastClaimedMode(fromMode);
+      restrictionTracker.setLastClaimedChildPartitionsToWaitFor(defaultChildPartitionsToWaitFor);
       final Consumer<PartitionPosition> assertFn = errorExpected ?
-          (PartitionPosition position) -> assertThrows(IllegalArgumentException.class,
-              () -> restrictionTracker.tryClaim(position)) :
-          (PartitionPosition position) -> assertTrue(restrictionTracker.tryClaim(position));
+          (PartitionPosition position) -> {
+            assertThrows(IllegalArgumentException.class, () -> restrictionTracker.tryClaim(position));
+          } :
+          (PartitionPosition position) -> {
+            assertTrue(restrictionTracker.tryClaim(position));
+            assertEquals(
+                toMode,
+                restrictionTracker.currentRestriction().getMode()
+            );
+            assertEquals(
+                position.getTimestamp().orElse(defaultTimestamp),
+                restrictionTracker.currentRestriction().getStartTimestamp()
+            );
+            assertEquals(
+                position.getChildPartitionsToWaitFor().orElse(defaultChildPartitionsToWaitFor),
+                restrictionTracker.currentRestriction().getChildPartitionsToWaitFor()
+            );
+          };
 
       switch (toMode) {
         case QUERY_CHANGE_STREAM:
-          assertFn.accept(PartitionPosition.queryChangeStream(timestamp));
+          assertFn.accept(PartitionPosition.queryChangeStream(Timestamp.ofTimeSecondsAndNanos(100L, 200)));
           break;
         case WAIT_FOR_CHILD_PARTITIONS:
           assertFn.accept(PartitionPosition.waitForChildPartitions(10L));
