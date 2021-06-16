@@ -56,7 +56,10 @@ import org.apache.beam.sdk.coders.SerializableCoder;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.DetectNewPartitions;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.PipelineInitializer;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.ReadChangeStreamPartitionDoFn;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ActionFactory;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.DaoFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.MapperFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Distribution;
@@ -1415,8 +1418,15 @@ public class SpannerIO {
 
       // FIXME: This should come from the generated table name
       final String tableName = "tableName";
+      final DaoFactory daoFactory = new DaoFactory(getChangeStreamName());
+      final MapperFactory mapperFactory = new MapperFactory();
+      final ActionFactory actionFactory = new ActionFactory();
       final ReadChangeStreamPartitionDoFn readChangeStreamPartitionDoFn =
-          new ReadChangeStreamPartitionDoFn(getSpannerConfig());
+          new ReadChangeStreamPartitionDoFn(
+              getSpannerConfig(),
+              daoFactory,
+              mapperFactory,
+              actionFactory);
       return input
           .apply("Execute query", Create.of(1))
           .apply(ParDo.of(new DetectNewPartitions()))

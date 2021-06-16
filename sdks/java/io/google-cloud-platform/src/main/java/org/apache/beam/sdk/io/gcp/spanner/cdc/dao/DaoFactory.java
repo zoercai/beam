@@ -16,18 +16,27 @@
 
 package org.apache.beam.sdk.io.gcp.spanner.cdc.dao;
 
+import java.io.Serializable;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerAccessor;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 
-public class DaoFactory {
+public class DaoFactory implements Serializable {
 
-  public static PartitionMetadataDao partitionMetadataDaoFrom(SpannerConfig spannerConfig) {
+  private static final long serialVersionUID = 7929063669009832487L;
+  
+  private final String changeStreamName;
+
+  public DaoFactory(String changeStreamName) {
+    this.changeStreamName = changeStreamName;
+  }
+
+  public PartitionMetadataDao partitionMetadataDaoFrom(SpannerConfig spannerConfig) {
     final SpannerAccessor spannerAccessor = SpannerAccessor.getOrCreate(spannerConfig);
     return new PartitionMetadataDao(spannerAccessor.getDatabaseClient());
   }
 
-  public static ChangeStreamDao changeStreamDaoFrom(SpannerConfig spannerConfig) {
+  public ChangeStreamDao changeStreamDaoFrom(SpannerConfig spannerConfig) {
     final SpannerAccessor spannerAccessor = SpannerAccessor.getOrCreate(spannerConfig);
-    return new ChangeStreamDao(spannerAccessor.getDatabaseClient());
+    return new ChangeStreamDao(changeStreamName, spannerAccessor.getDatabaseClient());
   }
 }

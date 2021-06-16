@@ -17,10 +17,13 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.mapper;
 
 import com.google.gson.Gson;
+import java.io.Serializable;
 
-public class MapperFactory {
+public class MapperFactory implements Serializable {
 
-  public static ChangeStreamRecordMapper changeStreamRecordMapper() {
+  private static final long serialVersionUID = -813434573067800902L;
+
+  public ChangeStreamRecordMapper changeStreamRecordMapper() {
     return new ChangeStreamRecordMapper(new Gson());
   }
 

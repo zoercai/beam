@@ -61,6 +61,9 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private static final Logger LOG = LoggerFactory.getLogger(ReadChangeStreamPartitionDoFn.class);
 
   private final SpannerConfig spannerConfig;
+  private final DaoFactory daoFactory;
+  private final MapperFactory mapperFactory;
+  private final ActionFactory actionFactory;
   private transient ChangeStreamRecordMapper changeStreamRecordMapper;
   private transient ChangeStreamDao changeStreamDao;
 
@@ -72,8 +75,15 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private transient HeartbeatRecordAction heartbeatRecordAction;
   private transient ChildPartitionsRecordAction childPartitionsRecordAction;
 
-  public ReadChangeStreamPartitionDoFn(SpannerConfig spannerConfig) {
+  public ReadChangeStreamPartitionDoFn(
+      SpannerConfig spannerConfig,
+      DaoFactory daoFactory,
+      MapperFactory mapperFactory,
+      ActionFactory actionFactory) {
     this.spannerConfig = spannerConfig;
+    this.daoFactory = daoFactory;
+    this.mapperFactory = mapperFactory;
+    this.actionFactory = actionFactory;
   }
 
   @GetInitialWatermarkEstimatorState
@@ -101,18 +111,18 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
   @Setup
   public void setup() {
-    final PartitionMetadataDao partitionMetadataDao = DaoFactory.partitionMetadataDaoFrom(spannerConfig);
-    this.changeStreamDao = DaoFactory.changeStreamDaoFrom(spannerConfig);
-    this.changeStreamRecordMapper = MapperFactory.changeStreamRecordMapper();
+    final PartitionMetadataDao partitionMetadataDao = daoFactory.partitionMetadataDaoFrom(spannerConfig);
+    this.changeStreamDao = daoFactory.changeStreamDaoFrom(spannerConfig);
+    this.changeStreamRecordMapper = mapperFactory.changeStreamRecordMapper();
 
-    this.waitForChildPartitionsAction = ActionFactory.waitForChildPartitionsAction(partitionMetadataDao, Duration.millis(100));
-    this.finishPartitionAction = ActionFactory.finishPartitionAction(partitionMetadataDao);
-    this.waitForParentPartitionsAction = ActionFactory.waitForParentPartitionsAction(partitionMetadataDao, Duration.millis(100));
-    this.deletePartitionAction = ActionFactory.deletePartitionAction(partitionMetadataDao);
+    this.waitForChildPartitionsAction = actionFactory.waitForChildPartitionsAction(partitionMetadataDao, Duration.millis(100));
+    this.finishPartitionAction = actionFactory.finishPartitionAction(partitionMetadataDao);
+    this.waitForParentPartitionsAction = actionFactory.waitForParentPartitionsAction(partitionMetadataDao, Duration.millis(100));
+    this.deletePartitionAction = actionFactory.deletePartitionAction(partitionMetadataDao);
 
-    this.dataChangesRecordAction = ActionFactory.dataChangesRecordAction();
-    this.heartbeatRecordAction = ActionFactory.heartbeatRecordAction();
-    this.childPartitionsRecordAction = ActionFactory.childPartitionsRecordAction(partitionMetadataDao, waitForChildPartitionsAction);
+    this.dataChangesRecordAction = actionFactory.dataChangesRecordAction();
+    this.heartbeatRecordAction = actionFactory.heartbeatRecordAction();
+    this.childPartitionsRecordAction = actionFactory.childPartitionsRecordAction(partitionMetadataDao, waitForChildPartitionsAction);
   }
 
   @ProcessElement
@@ -147,8 +157,15 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       OutputReceiver<DataChangesRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator
   ) {
-    Optional<ProcessContinuation> maybeContinuation;
-    try (ResultSet resultSet = changeStreamDao.changeStreamQuery()) {
+    try (ResultSet resultSet = changeStreamDao.changeStreamQuery(
+        partition.getPartitionToken(),
+        tracker.currentRestriction().getStartTimestamp(),
+        partition.isInclusiveStart(),
+        partition.getEndTimestamp(),
+        partition.isInclusiveEnd(),
+        partition.getHeartbeatSeconds())
+    ) {
+      Optional<ProcessContinuation> maybeContinuation;
       while (resultSet.next()) {
         // TODO: Check what should we do if there is an error here
         final List<ChangeStreamRecord> records = changeStreamRecordMapper

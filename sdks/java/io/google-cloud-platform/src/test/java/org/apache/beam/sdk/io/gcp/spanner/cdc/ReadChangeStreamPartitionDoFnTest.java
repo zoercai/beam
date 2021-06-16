@@ -8,7 +8,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.powermock.api.mockito.PowerMockito.mockStatic;
 
 import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.ResultSet;
@@ -46,17 +45,17 @@ import org.joda.time.Instant;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.junit.runners.JUnit4;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({DaoFactory.class, ActionFactory.class, MapperFactory.class})
+@RunWith(JUnit4.class)
 public class ReadChangeStreamPartitionDoFnTest {
 
   private static final String PARTITION_TOKEN = "partitionToken";
   private static final Timestamp PARTITION_START_TIMESTAMP = Timestamp.ofTimeSecondsAndNanos(10, 20);
+  private static final boolean PARTITION_IS_INCLUSIVE_START = true;
   private static final Timestamp PARTITION_END_TIMESTAMP = Timestamp.ofTimeSecondsAndNanos(30, 40);
-  public static final long PARTITION_HEARTBEAT_SECONDS = 30L;
+  private static final boolean PARTITION_IS_INCLUSIVE_END = false;
+  private static final long PARTITION_HEARTBEAT_SECONDS = 30L;
 
   private ChangeStreamDao changeStreamDao;
   private ReadChangeStreamPartitionDoFn doFn;
@@ -81,11 +80,11 @@ public class ReadChangeStreamPartitionDoFnTest {
         .withProjectId("project-id")
         .withInstanceId("instance-id")
         .withDatabaseId("database-id");
-    mockStatic(DaoFactory.class);
-    mockStatic(ActionFactory.class);
-    mockStatic(MapperFactory.class);
 
     final Duration resumeDuration = Duration.millis(100);
+    final DaoFactory daoFactory = mock(DaoFactory.class);
+    final MapperFactory mapperFactory = mock(MapperFactory.class);
+    final ActionFactory actionFactory = mock(ActionFactory.class);
     final PartitionMetadataDao partitionMetadataDao = mock(PartitionMetadataDao.class);
     changeStreamDao = mock(ChangeStreamDao.class);
     waitForChildPartitionsAction = mock(WaitForChildPartitionsAction.class);
@@ -97,15 +96,20 @@ public class ReadChangeStreamPartitionDoFnTest {
     childPartitionsRecordAction = mock(ChildPartitionsRecordAction.class);
     changeStreamRecordMapper = mock(ChangeStreamRecordMapper.class);
 
-    doFn = new ReadChangeStreamPartitionDoFn(spannerConfig);
+    doFn = new ReadChangeStreamPartitionDoFn(
+        spannerConfig,
+        daoFactory,
+        mapperFactory,
+        actionFactory
+    );
 
     partition = PartitionMetadata.newBuilder()
         .setPartitionToken(PARTITION_TOKEN)
         .setParentTokens(Collections.singletonList("parentToken"))
         .setStartTimestamp(PARTITION_START_TIMESTAMP)
-        .setInclusiveStart(true)
+        .setInclusiveStart(PARTITION_IS_INCLUSIVE_START)
         .setEndTimestamp(PARTITION_END_TIMESTAMP)
-        .setInclusiveEnd(false)
+        .setInclusiveEnd(PARTITION_IS_INCLUSIVE_END)
         .setHeartbeatSeconds(PARTITION_HEARTBEAT_SECONDS)
         .setState(SCHEDULED)
         .build();
@@ -115,16 +119,17 @@ public class ReadChangeStreamPartitionDoFnTest {
     watermarkEstimator = mock(ManualWatermarkEstimator.class);
 
     when(restrictionTracker.currentRestriction()).thenReturn(restriction);
-    when(DaoFactory.partitionMetadataDaoFrom(spannerConfig)).thenReturn(partitionMetadataDao);
-    when(DaoFactory.changeStreamDaoFrom(spannerConfig)).thenReturn(changeStreamDao);
-    when(ActionFactory.waitForChildPartitionsAction(partitionMetadataDao, resumeDuration)).thenReturn(waitForChildPartitionsAction);
-    when(ActionFactory.finishPartitionAction(partitionMetadataDao)).thenReturn(finishPartitionAction);
-    when(ActionFactory.waitForParentPartitionsAction(partitionMetadataDao, resumeDuration)).thenReturn(waitForParentPartitionsAction);
-    when(ActionFactory.deletePartitionAction(partitionMetadataDao)).thenReturn(deletePartitionAction);
-    when(ActionFactory.dataChangesRecordAction()).thenReturn(dataChangesRecordAction);
-    when(ActionFactory.heartbeatRecordAction()).thenReturn(heartbeatRecordAction);
-    when(ActionFactory.childPartitionsRecordAction(partitionMetadataDao, waitForChildPartitionsAction)).thenReturn(childPartitionsRecordAction);
-    when(MapperFactory.changeStreamRecordMapper()).thenReturn(changeStreamRecordMapper);
+    when(restriction.getStartTimestamp()).thenReturn(PARTITION_START_TIMESTAMP);
+    when(daoFactory.partitionMetadataDaoFrom(spannerConfig)).thenReturn(partitionMetadataDao);
+    when(daoFactory.changeStreamDaoFrom(spannerConfig)).thenReturn(changeStreamDao);
+    when(mapperFactory.changeStreamRecordMapper()).thenReturn(changeStreamRecordMapper);
+    when(actionFactory.waitForChildPartitionsAction(partitionMetadataDao, resumeDuration)).thenReturn(waitForChildPartitionsAction);
+    when(actionFactory.finishPartitionAction(partitionMetadataDao)).thenReturn(finishPartitionAction);
+    when(actionFactory.waitForParentPartitionsAction(partitionMetadataDao, resumeDuration)).thenReturn(waitForParentPartitionsAction);
+    when(actionFactory.deletePartitionAction(partitionMetadataDao)).thenReturn(deletePartitionAction);
+    when(actionFactory.dataChangesRecordAction()).thenReturn(dataChangesRecordAction);
+    when(actionFactory.heartbeatRecordAction()).thenReturn(heartbeatRecordAction);
+    when(actionFactory.childPartitionsRecordAction(partitionMetadataDao, waitForChildPartitionsAction)).thenReturn(childPartitionsRecordAction);
 
     doFn.setup();
   }
@@ -136,7 +141,13 @@ public class ReadChangeStreamPartitionDoFnTest {
     final DataChangesRecord record1 = mock(DataChangesRecord.class);
     final DataChangesRecord record2 = mock(DataChangesRecord.class);
     when(restriction.getMode()).thenReturn(PartitionMode.QUERY_CHANGE_STREAM);
-    when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
+    when(changeStreamDao.changeStreamQuery(
+        PARTITION_TOKEN,
+        PARTITION_START_TIMESTAMP,
+        PARTITION_IS_INCLUSIVE_START,
+        PARTITION_END_TIMESTAMP,
+        PARTITION_IS_INCLUSIVE_END,
+        PARTITION_HEARTBEAT_SECONDS)).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(rowAsStruct);
     when(changeStreamRecordMapper.toChangeStreamRecords(PARTITION_TOKEN, rowAsStruct))
@@ -169,7 +180,13 @@ public class ReadChangeStreamPartitionDoFnTest {
     final HeartbeatRecord record1 = mock(HeartbeatRecord.class);
     final HeartbeatRecord record2 = mock(HeartbeatRecord.class);
     when(restriction.getMode()).thenReturn(PartitionMode.QUERY_CHANGE_STREAM);
-    when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
+    when(changeStreamDao.changeStreamQuery(
+        PARTITION_TOKEN,
+        PARTITION_START_TIMESTAMP,
+        PARTITION_IS_INCLUSIVE_START,
+        PARTITION_END_TIMESTAMP,
+        PARTITION_IS_INCLUSIVE_END,
+        PARTITION_HEARTBEAT_SECONDS)).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(rowAsStruct);
     when(changeStreamRecordMapper.toChangeStreamRecords(PARTITION_TOKEN, rowAsStruct))
@@ -202,7 +219,13 @@ public class ReadChangeStreamPartitionDoFnTest {
     final ChildPartitionsRecord record1 = mock(ChildPartitionsRecord.class);
     final ChildPartitionsRecord record2 = mock(ChildPartitionsRecord.class);
     when(restriction.getMode()).thenReturn(PartitionMode.QUERY_CHANGE_STREAM);
-    when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
+    when(changeStreamDao.changeStreamQuery(
+        PARTITION_TOKEN,
+        PARTITION_START_TIMESTAMP,
+        PARTITION_IS_INCLUSIVE_START,
+        PARTITION_END_TIMESTAMP,
+        PARTITION_IS_INCLUSIVE_END,
+        PARTITION_HEARTBEAT_SECONDS)).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(true);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(rowAsStruct);
     when(changeStreamRecordMapper.toChangeStreamRecords(PARTITION_TOKEN, rowAsStruct))
@@ -232,7 +255,13 @@ public class ReadChangeStreamPartitionDoFnTest {
   public void testQueryChangeStreamModeWithStreamFinished() {
     final ResultSet resultSet = mock(ResultSet.class);
     when(restriction.getMode()).thenReturn(PartitionMode.QUERY_CHANGE_STREAM);
-    when(changeStreamDao.changeStreamQuery()).thenReturn(resultSet);
+    when(changeStreamDao.changeStreamQuery(
+        PARTITION_TOKEN,
+        PARTITION_START_TIMESTAMP,
+        PARTITION_IS_INCLUSIVE_START,
+        PARTITION_END_TIMESTAMP,
+        PARTITION_IS_INCLUSIVE_END,
+        PARTITION_HEARTBEAT_SECONDS)).thenReturn(resultSet);
     when(resultSet.next()).thenReturn(false);
 
     final ProcessContinuation result = doFn

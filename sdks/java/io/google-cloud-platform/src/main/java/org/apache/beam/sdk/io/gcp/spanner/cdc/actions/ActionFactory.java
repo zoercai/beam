@@ -16,43 +16,46 @@
 
 package org.apache.beam.sdk.io.gcp.spanner.cdc.actions;
 
+import java.io.Serializable;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.joda.time.Duration;
 
-public class ActionFactory {
+public class ActionFactory implements Serializable {
 
-  public static DataChangesRecordAction dataChangesRecordAction() {
+  private static final long serialVersionUID = -4060958761369602619L;
+
+  public DataChangesRecordAction dataChangesRecordAction() {
     return new DataChangesRecordAction();
   }
 
-  public static HeartbeatRecordAction heartbeatRecordAction() {
+  public HeartbeatRecordAction heartbeatRecordAction() {
     return new HeartbeatRecordAction();
   }
 
-  public static ChildPartitionsRecordAction childPartitionsRecordAction(
+  public ChildPartitionsRecordAction childPartitionsRecordAction(
       PartitionMetadataDao partitionMetadataDao,
       WaitForChildPartitionsAction waitForChildPartitionsAction) {
     return new ChildPartitionsRecordAction(partitionMetadataDao, waitForChildPartitionsAction);
   }
 
-  public static FinishPartitionAction finishPartitionAction(
+  public FinishPartitionAction finishPartitionAction(
       PartitionMetadataDao partitionMetadataDao) {
     return new FinishPartitionAction(partitionMetadataDao);
   }
 
-  public static WaitForChildPartitionsAction waitForChildPartitionsAction(
+  public WaitForChildPartitionsAction waitForChildPartitionsAction(
       PartitionMetadataDao partitionMetadataDao,
       Duration resumeDuration) {
     return new WaitForChildPartitionsAction(partitionMetadataDao, resumeDuration);
   }
 
-  public static WaitForParentPartitionsAction waitForParentPartitionsAction(
+  public WaitForParentPartitionsAction waitForParentPartitionsAction(
       PartitionMetadataDao partitionMetadataDao,
       Duration resumeDuration) {
     return new WaitForParentPartitionsAction(partitionMetadataDao, resumeDuration);
   }
 
-  public static DeletePartitionAction deletePartitionAction(
+  public DeletePartitionAction deletePartitionAction(
       PartitionMetadataDao partitionMetadataDao) {
     return new DeletePartitionAction(partitionMetadataDao);
   }

@@ -31,7 +31,6 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
 
-// TODO: Check if this should be made static
 public class TestStructMapper {
 
   private static final Type CHILD_PARTITION_TYPE = Type.struct(
