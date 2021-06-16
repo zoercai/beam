@@ -17,10 +17,10 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
 import com.google.cloud.Timestamp;
-import com.google.common.annotations.VisibleForTesting;
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.Optional;
+import org.apache.beam.vendor.grpc.v1p36p0.com.google.common.annotations.VisibleForTesting;
 
 public class PartitionPosition implements Serializable {
 
