@@ -165,7 +165,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
         partition.isInclusiveEnd(),
         partition.getHeartbeatSeconds())
     ) {
-      Optional<ProcessContinuation> maybeContinuation;
       while (resultSet.next()) {
         // TODO: Check what should we do if there is an error here
         final List<ChangeStreamRecord> records = changeStreamRecordMapper
@@ -174,6 +173,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
                 resultSet.getCurrentRowAsStruct()
             );
 
+        Optional<ProcessContinuation> maybeContinuation;
         for (ChangeStreamRecord record : records) {
           if (record instanceof DataChangesRecord) {
             maybeContinuation = dataChangesRecordAction.run(
