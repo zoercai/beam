@@ -236,7 +236,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
     return waitForParentPartitionsAction
         .run(partition, tracker)
         .orElseGet(() -> deletePartition(partition, tracker));
-
   }
 
   private ProcessContinuation deletePartition(
@@ -245,7 +244,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
     return deletePartitionAction
         .run(partition, tracker)
         .orElseGet(() -> done(tracker));
-
   }
 
   private ProcessContinuation done(

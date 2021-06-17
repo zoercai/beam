@@ -37,6 +37,7 @@ public class DataChangesRecordAction {
     if (!tracker.tryClaim(PartitionPosition.queryChangeStream(commitTimestamp))) {
       return Optional.of(ProcessContinuation.stop());
     }
+    // TODO: Ask about this, do we need to output with timestamp?
     outputReceiver.output(record);
     watermarkEstimator.setWatermark(new Instant(commitTimestamp.toSqlTimestamp().getTime()));
 

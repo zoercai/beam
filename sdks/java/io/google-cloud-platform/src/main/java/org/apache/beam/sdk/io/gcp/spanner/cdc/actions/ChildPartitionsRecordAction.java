@@ -90,6 +90,7 @@ public class ChildPartitionsRecordAction {
       }
     }
 
+    // Needs to hold the watermark until all my children have finished
     return waitForChildPartitionsAction.run(
         partition,
         tracker,
