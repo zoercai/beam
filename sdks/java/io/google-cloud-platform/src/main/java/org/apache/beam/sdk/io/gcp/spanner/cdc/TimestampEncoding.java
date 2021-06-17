@@ -46,12 +46,23 @@ public class TimestampEncoding extends CustomEncoding<Timestamp> {
   @Override
   protected void write(Object datum, Encoder out) throws IOException {
     final Timestamp timestamp = (Timestamp) datum;
-    out.writeLong(timestamp.getSeconds());
-    out.writeInt(timestamp.getNanos());
+    if (timestamp == null) {
+      out.writeLong(-1L);
+      out.writeInt(-1);
+    } else {
+      out.writeLong(timestamp.getSeconds());
+      out.writeInt(timestamp.getNanos());
+    }
   }
 
   @Override
   protected Timestamp read(Object reuse, Decoder in) throws IOException {
-    return Timestamp.ofTimeSecondsAndNanos(in.readLong(), in.readInt());
+    final long seconds =in.readLong();
+    final int nanos = in.readInt();
+    if (seconds < 0 && nanos < 0) {
+      return null;
+    } else {
+      return Timestamp.ofTimeSecondsAndNanos(seconds, nanos);
+    }
   }
 }
