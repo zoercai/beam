@@ -36,9 +36,11 @@ import java.util.Collections;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.extensions.gcp.options.GcpOptions;
 import org.apache.beam.sdk.io.GenerateSequence;
-import org.apache.beam.sdk.io.gcp.spanner.SpannerTestUtils.SpannerTestPipelineOptions;
+import org.apache.beam.sdk.options.Default;
+import org.apache.beam.sdk.options.Description;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.testing.TestPipeline;
+import org.apache.beam.sdk.testing.TestPipelineOptions;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.transforms.Wait;
@@ -59,8 +61,37 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class SpannerWriteIT {
 
+  private static final int MAX_DB_NAME_LENGTH = 30;
+
   @Rule public final transient TestPipeline p = TestPipeline.create();
   @Rule public transient ExpectedException thrown = ExpectedException.none();
+
+  /** Pipeline options for this test. */
+  public interface SpannerTestPipelineOptions extends TestPipelineOptions {
+    @Description("Project that hosts Spanner instance")
+    @Nullable
+    String getInstanceProjectId();
+
+    void setInstanceProjectId(String value);
+
+    @Description("Instance ID to write to in Spanner")
+    @Default.String("beam-test")
+    String getInstanceId();
+
+    void setInstanceId(String value);
+
+    @Description("Database ID prefix to write to in Spanner")
+    @Default.String("beam-testdb")
+    String getDatabaseIdPrefix();
+
+    void setDatabaseIdPrefix(String value);
+
+    @Description("Table name")
+    @Default.String("users")
+    String getTable();
+
+    void setTable(String value);
+  }
 
   private Spanner spanner;
   private DatabaseAdminClient databaseAdminClient;
@@ -80,7 +111,7 @@ public class SpannerWriteIT {
 
     spanner = SpannerOptions.newBuilder().setProjectId(project).build().getService();
 
-    databaseName = SpannerTestUtils.generateDatabaseName(options.getDatabaseIdPrefix());
+    databaseName = generateDatabaseName();
 
     databaseAdminClient = spanner.getDatabaseAdminClient();
 
@@ -101,8 +132,15 @@ public class SpannerWriteIT {
     op.get();
   }
 
+  private String generateDatabaseName() {
+    String random =
+        RandomUtils.randomAlphaNumeric(
+            MAX_DB_NAME_LENGTH - 1 - options.getDatabaseIdPrefix().length());
+    return options.getDatabaseIdPrefix() + "-" + random;
+  }
+
   @Test
-  public void testWrite() {
+  public void testWrite() throws Exception {
     int numRecords = 100;
     p.apply(GenerateSequence.from(0).to(numRecords))
         .apply(ParDo.of(new GenerateMutations(options.getTable())))
@@ -119,7 +157,7 @@ public class SpannerWriteIT {
   }
 
   @Test
-  public void testSequentialWrite() {
+  public void testSequentialWrite() throws Exception {
     int numRecords = 100;
 
     SpannerWriteResult stepOne =
@@ -148,7 +186,7 @@ public class SpannerWriteIT {
   }
 
   @Test
-  public void testReportFailures() {
+  public void testReportFailures() throws Exception {
     int numRecords = 100;
     p.apply(GenerateSequence.from(0).to(2 * numRecords))
         .apply(ParDo.of(new GenerateMutations(options.getTable(), new DivBy2())))
@@ -166,7 +204,7 @@ public class SpannerWriteIT {
   }
 
   @Test
-  public void testFailFast() {
+  public void testFailFast() throws Exception {
     thrown.expect(new StackTraceContainsString("SpannerException"));
     thrown.expect(new StackTraceContainsString("Value must not be NULL in table users"));
     int numRecords = 100;
@@ -183,7 +221,7 @@ public class SpannerWriteIT {
   }
 
   @After
-  public void tearDown() {
+  public void tearDown() throws Exception {
     databaseAdminClient.dropDatabase(options.getInstanceId(), databaseName);
     spanner.close();
   }
@@ -199,7 +237,7 @@ public class SpannerWriteIT {
     }
 
     public GenerateMutations(String table) {
-      this(table, Predicates.alwaysFalse());
+      this(table, Predicates.<Long>alwaysFalse());
     }
 
     @ProcessElement

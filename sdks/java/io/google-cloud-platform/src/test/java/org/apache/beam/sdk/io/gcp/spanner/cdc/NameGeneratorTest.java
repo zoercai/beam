@@ -17,7 +17,8 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -33,8 +34,8 @@ public class NameGeneratorTest {
 
   @Test
   public void testGenerateMetadataTableNameIsShorterThan128Characters() {
-    final String tableName = NameGenerator
-        .generateMetadataTableName("my-database-id1-maximum-length");
+    final String tableName =
+        NameGenerator.generateMetadataTableName("my-database-id1-maximum-length");
     assertTrue(tableName.length() < MAXIMUM_TABLE_NAME_LENGTH);
   }
 }

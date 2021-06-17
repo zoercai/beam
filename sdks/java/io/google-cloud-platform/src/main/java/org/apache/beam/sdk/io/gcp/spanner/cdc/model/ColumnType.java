@@ -17,11 +17,11 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc.model;
 
-import com.google.common.base.Objects;
 import java.io.Serializable;
 import org.apache.beam.sdk.coders.AvroCoder;
 import org.apache.beam.sdk.coders.DefaultCoder;
 import org.apache.beam.sdk.schemas.annotations.SchemaCreate;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Objects;
 
 @DefaultCoder(AvroCoder.class)
 public class ColumnType implements Serializable {
@@ -33,16 +33,11 @@ public class ColumnType implements Serializable {
   private boolean isPrimaryKey;
   private long ordinalPosition;
 
-  /**
-   * Default constructor for serialization only.
-   */
+  /** Default constructor for serialization only. */
   private ColumnType() {}
 
   @SchemaCreate
-  public ColumnType(String name,
-      TypeCode type,
-      boolean isPrimaryKey,
-      long ordinalPosition) {
+  public ColumnType(String name, TypeCode type, boolean isPrimaryKey, long ordinalPosition) {
     this.name = name;
     this.type = type;
     this.isPrimaryKey = isPrimaryKey;
@@ -90,10 +85,10 @@ public class ColumnType implements Serializable {
       return false;
     }
     ColumnType that = (ColumnType) o;
-    return isPrimaryKey() == that.isPrimaryKey() &&
-        getOrdinalPosition() == that.getOrdinalPosition() &&
-        Objects.equal(getName(), that.getName()) &&
-        Objects.equal(getType(), that.getType());
+    return isPrimaryKey() == that.isPrimaryKey()
+        && getOrdinalPosition() == that.getOrdinalPosition()
+        && Objects.equal(getName(), that.getName())
+        && Objects.equal(getType(), that.getType());
   }
 
   @Override
@@ -103,11 +98,16 @@ public class ColumnType implements Serializable {
 
   @Override
   public String toString() {
-    return "ColumnType{" +
-        "name='" + name + '\'' +
-        ", type=" + type +
-        ", isPrimaryKey=" + isPrimaryKey +
-        ", ordinalPosition=" + ordinalPosition +
-        '}';
+    return "ColumnType{"
+        + "name='"
+        + name
+        + '\''
+        + ", type="
+        + type
+        + ", isPrimaryKey="
+        + isPrimaryKey
+        + ", ordinalPosition="
+        + ordinalPosition
+        + '}';
   }
 }

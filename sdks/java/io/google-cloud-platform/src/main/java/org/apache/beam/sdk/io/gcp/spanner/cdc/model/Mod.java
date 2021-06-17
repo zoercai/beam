@@ -17,13 +17,12 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc.model;
 
-import com.google.common.base.Objects;
 import java.io.Serializable;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import org.apache.beam.sdk.coders.AvroCoder;
 import org.apache.beam.sdk.coders.DefaultCoder;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Objects;
 
 @DefaultCoder(AvroCoder.class)
 public class Mod implements Serializable {
@@ -38,12 +37,11 @@ public class Mod implements Serializable {
     return new OldAndNewBuilder();
   }
 
-  /**
-   * Default constructor for serialization only.
-   */
+  /** Default constructor for serialization only. */
   private Mod() {}
 
-  public Mod(Map<String, String> keys, Map<String, String> oldValues, Map<String, String> newValues) {
+  public Mod(
+      Map<String, String> keys, Map<String, String> oldValues, Map<String, String> newValues) {
     this.keys = keys;
     this.oldValues = oldValues;
     this.newValues = newValues;
@@ -84,8 +82,8 @@ public class Mod implements Serializable {
       this.newValues = new HashMap<>();
     }
 
-    public OldAndNewBuilder addValue(String keyColumn, String keyValue, String name,
-        String oldValue, String newValue) {
+    public OldAndNewBuilder addValue(
+        String keyColumn, String keyValue, String name, String oldValue, String newValue) {
       keys.put(keyColumn, keyValue);
       oldValues.put(name, oldValue);
       newValues.put(name, newValue);
@@ -106,9 +104,9 @@ public class Mod implements Serializable {
       return false;
     }
     Mod mod = (Mod) o;
-    return Objects.equal(getKeys(), mod.getKeys()) &&
-        Objects.equal(getOldValues(), mod.getOldValues()) &&
-        Objects.equal(getNewValues(), mod.getNewValues());
+    return Objects.equal(getKeys(), mod.getKeys())
+        && Objects.equal(getOldValues(), mod.getOldValues())
+        && Objects.equal(getNewValues(), mod.getNewValues());
   }
 
   @Override
@@ -118,10 +116,6 @@ public class Mod implements Serializable {
 
   @Override
   public String toString() {
-    return "Mod{" +
-        "keys=" + keys +
-        ", oldValues=" + oldValues +
-        ", newValues=" + newValues +
-        '}';
+    return "Mod{" + "keys=" + keys + ", oldValues=" + oldValues + ", newValues=" + newValues + '}';
   }
 }
