@@ -30,9 +30,9 @@ public class DaoFactory implements Serializable {
     this.changeStreamName = changeStreamName;
   }
 
-  public PartitionMetadataDao partitionMetadataDaoFrom(SpannerConfig spannerConfig) {
+  public PartitionMetadataDao partitionMetadataDaoFrom(SpannerConfig spannerConfig, String tableName) {
     final SpannerAccessor spannerAccessor = SpannerAccessor.getOrCreate(spannerConfig);
-    return new PartitionMetadataDao(spannerAccessor.getDatabaseClient());
+    return new PartitionMetadataDao(spannerAccessor.getDatabaseClient(), tableName);
   }
 
   public ChangeStreamDao changeStreamDaoFrom(SpannerConfig spannerConfig) {

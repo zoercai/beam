@@ -104,6 +104,6 @@ public class PipelineInitializer {
         .setHeartbeatSeconds(DEFAULT_HEARTBEAT_SECONDS)
         .setState(State.CREATED)
         .build();
-    partitionMetadataDao.insert(id.getDatabase(), parentPartition);
+    partitionMetadataDao.insert(parentPartition);
   }
 }

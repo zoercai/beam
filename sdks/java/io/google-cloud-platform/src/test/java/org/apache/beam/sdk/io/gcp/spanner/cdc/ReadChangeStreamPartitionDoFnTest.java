@@ -51,6 +51,7 @@ import org.junit.runners.JUnit4;
 public class ReadChangeStreamPartitionDoFnTest {
 
   private static final String PARTITION_TOKEN = "partitionToken";
+  private static final String TABLE_NAME = "metadata_table";
   private static final Timestamp PARTITION_START_TIMESTAMP = Timestamp.ofTimeSecondsAndNanos(10, 20);
   private static final boolean PARTITION_IS_INCLUSIVE_START = true;
   private static final Timestamp PARTITION_END_TIMESTAMP = Timestamp.ofTimeSecondsAndNanos(30, 40);
@@ -98,6 +99,7 @@ public class ReadChangeStreamPartitionDoFnTest {
 
     doFn = new ReadChangeStreamPartitionDoFn(
         spannerConfig,
+        TABLE_NAME,
         daoFactory,
         mapperFactory,
         actionFactory
@@ -120,7 +122,7 @@ public class ReadChangeStreamPartitionDoFnTest {
 
     when(restrictionTracker.currentRestriction()).thenReturn(restriction);
     when(restriction.getStartTimestamp()).thenReturn(PARTITION_START_TIMESTAMP);
-    when(daoFactory.partitionMetadataDaoFrom(spannerConfig)).thenReturn(partitionMetadataDao);
+    when(daoFactory.partitionMetadataDaoFrom(spannerConfig, TABLE_NAME)).thenReturn(partitionMetadataDao);
     when(daoFactory.changeStreamDaoFrom(spannerConfig)).thenReturn(changeStreamDao);
     when(mapperFactory.changeStreamRecordMapper()).thenReturn(changeStreamRecordMapper);
     when(actionFactory.waitForChildPartitionsAction(partitionMetadataDao, resumeDuration)).thenReturn(waitForChildPartitionsAction);

@@ -1403,8 +1403,11 @@ public class SpannerIO {
               .before(changeStreamsDb.getCreateTime().toSqlTimestamp()),
           "Start time must not be before the change stream creation time.");
 
+      // TODO resolve tableName here when rebasing
+      String tableName = "will be resolved when rebasing";
+
       PipelineInitializer pipelineInitializer = new PipelineInitializer();
-      PartitionMetadataDao partitionMetadataDao = new PartitionMetadataDao(databaseClient);
+      PartitionMetadataDao partitionMetadataDao = new PartitionMetadataDao(databaseClient, tableName);
       DatabaseId databaseId = DatabaseId.of(
           getSpannerConfig().getProjectId().get(),
           getSpannerConfig().getInstanceId().get(),
@@ -1416,14 +1419,14 @@ public class SpannerIO {
           getInclusiveStartAt(),
           getExclusiveEndAt());
 
-      // FIXME: This should come from the generated table name
-      final String tableName = "tableName";
+      // TODO there's a PartitionMetadataDao created above already
       final DaoFactory daoFactory = new DaoFactory(getChangeStreamName());
       final MapperFactory mapperFactory = new MapperFactory();
       final ActionFactory actionFactory = new ActionFactory();
       final ReadChangeStreamPartitionDoFn readChangeStreamPartitionDoFn =
           new ReadChangeStreamPartitionDoFn(
               getSpannerConfig(),
+              tableName,
               daoFactory,
               mapperFactory,
               actionFactory);

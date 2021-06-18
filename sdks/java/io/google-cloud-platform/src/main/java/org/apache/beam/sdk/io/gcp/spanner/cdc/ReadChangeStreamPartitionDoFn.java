@@ -61,6 +61,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private static final Logger LOG = LoggerFactory.getLogger(ReadChangeStreamPartitionDoFn.class);
 
   private final SpannerConfig spannerConfig;
+  private final String tableName;
   private final DaoFactory daoFactory;
   private final MapperFactory mapperFactory;
   private final ActionFactory actionFactory;
@@ -77,10 +78,12 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
   public ReadChangeStreamPartitionDoFn(
       SpannerConfig spannerConfig,
+      String tableName,
       DaoFactory daoFactory,
       MapperFactory mapperFactory,
       ActionFactory actionFactory) {
     this.spannerConfig = spannerConfig;
+    this.tableName = tableName;
     this.daoFactory = daoFactory;
     this.mapperFactory = mapperFactory;
     this.actionFactory = actionFactory;
@@ -111,7 +114,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
   @Setup
   public void setup() {
-    final PartitionMetadataDao partitionMetadataDao = daoFactory.partitionMetadataDaoFrom(spannerConfig);
+    final PartitionMetadataDao partitionMetadataDao = daoFactory.partitionMetadataDaoFrom(spannerConfig, tableName);
     this.changeStreamDao = daoFactory.changeStreamDaoFrom(spannerConfig);
     this.changeStreamRecordMapper = mapperFactory.changeStreamRecordMapper();
 

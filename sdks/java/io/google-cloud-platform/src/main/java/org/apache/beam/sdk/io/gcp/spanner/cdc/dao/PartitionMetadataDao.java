@@ -1,12 +1,34 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.beam.sdk.io.gcp.spanner.cdc.dao;
 
 import com.google.cloud.spanner.DatabaseClient;
+import com.google.cloud.spanner.Key;
 import com.google.cloud.spanner.Mutation;
+import com.google.cloud.spanner.ResultSet;
+import com.google.cloud.spanner.Statement;
 import com.google.cloud.spanner.TransactionContext;
 import com.google.cloud.spanner.Value;
 import java.util.List;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State;
 
 // TODO: Integration test
 public class PartitionMetadataDao {
@@ -24,54 +46,80 @@ public class PartitionMetadataDao {
   public static final String COLUMN_UPDATED_AT = "UpdatedAt";
 
   private final DatabaseClient databaseClient;
+  private final String tableName;
 
-  // TODO: We should receive a table name in the constructor
-  public PartitionMetadataDao (DatabaseClient databaseClient) {
+  public PartitionMetadataDao(DatabaseClient databaseClient, String tableName) {
     this.databaseClient = databaseClient;
+    this.tableName = tableName;
   }
 
-  // TODO: Implement
-  // This should be the query as in https://docs.google.com/document/d/1SxD3L46vlAtAdC2wEFjhYuGuddE3AvkB1HFRnQ3yrzs/edit?resourcekey=0-k6ifYSXSlw0UQLRtVwnLlQ#bookmark=id.q712q48z4rl
   public long countChildPartitionsInStates(
-      String partitionToken,
-      List<PartitionMetadata.State> states) {
-    throw new UnsupportedOperationException("Unimplemented");
+      String partitionToken, List<PartitionMetadata.State> states) {
+    Statement statement =
+        Statement.newBuilder(
+            "SELECT COUNT(*)"
+                + " FROM " + tableName
+                + " WHERE @partition IN UNNEST (" + COLUMN_PARENT_TOKEN + ")"
+                + " AND "
+                + COLUMN_STATE
+                + " IN UNNEST (@states)")
+            .bind("partition")
+            .to(partitionToken)
+            .bind("states")
+            .toStringArray(states.stream().map(State::toString).collect(Collectors.toList()))
+            .build();
+    try (ResultSet resultSet = databaseClient.singleUse().executeQuery(statement)) {
+      resultSet.next();
+      return resultSet.getLong(0);
+    }
   }
 
-  // TODO: Implement
-  // This should be the query as in https://docs.google.com/document/d/1SxD3L46vlAtAdC2wEFjhYuGuddE3AvkB1HFRnQ3yrzs/edit?resourcekey=0-k6ifYSXSlw0UQLRtVwnLlQ#
   public long countExistingParents(String partitionToken) {
-    throw new UnsupportedOperationException("Unimplemented");
+    Statement statement =
+        Statement.newBuilder(
+            "SELECT COUNT(*)"
+                + " FROM " + tableName
+                + " WHERE "
+                + COLUMN_PARTITION_TOKEN
+                + " IN UNNEST (("
+                + " SELECT "
+                + COLUMN_PARENT_TOKEN
+                + " FROM " + tableName
+                + " WHERE "
+                + COLUMN_PARTITION_TOKEN
+                + " = "
+                + "@partition"
+                + "))")
+            .bind("partition")
+            .to(partitionToken)
+            .build();
+    try (ResultSet resultSet = databaseClient.singleUse().executeQuery(statement)) {
+      resultSet.next();
+      return resultSet.getLong(0);
+    }
   }
 
-  // FIXME: This should be unified with the method below (without the stable name as a parameter)
-  public void insert(String table, PartitionMetadata partitionMetadata) {
-    runInTransaction(transaction -> transaction.insert(partitionMetadata));
-  }
-
-  // FIXME: This should be unified with the method above
   public void insert(PartitionMetadata row) {
     runInTransaction(transaction -> transaction.insert(row));
   }
 
-  public long updateState(
-      String partitionToken,
-      PartitionMetadata.State state) {
-    return runInTransaction(transaction -> transaction.updateState(partitionToken, state));
+  public void updateState(String partitionToken, PartitionMetadata.State state) {
+    runInTransaction(transaction -> transaction.updateState(partitionToken, state));
   }
 
-  public long delete(String partitionToken) {
-    return runInTransaction(transaction -> transaction.delete(partitionToken));
+  public void delete(String partitionToken) {
+    runInTransaction(transaction -> transaction.delete(partitionToken));
   }
 
   public <T> T runInTransaction(Function<InTransactionContext, T> callable) {
     return databaseClient
         .readWriteTransaction()
-        .run(transaction -> {
-          // FIXME: table name should be given in the constructor instead of null
-          final InTransactionContext dao = new InTransactionContext(null, transaction);
-          return callable.apply(dao);
-        });
+        .run(
+            transaction -> {
+              final InTransactionContext transactionContext = new InTransactionContext(tableName,
+                  transaction);
+              return callable.apply(transactionContext);
+            });
   }
 
   public static class InTransactionContext {
@@ -84,33 +132,45 @@ public class PartitionMetadataDao {
       this.transaction = transaction;
     }
 
-    // TODO: Check implementation
     public Void insert(PartitionMetadata row) {
-      transaction.buffer(insertMutationFrom(tableName, row));
+      transaction.buffer(createInsertMutationFrom(row));
       return null;
     }
 
-    // TODO: Implement
-    public long updateState(String partitionToken, PartitionMetadata.State state) {
-      throw new UnsupportedOperationException("Unimplemented");
+    public Void updateState(String partitionToken, PartitionMetadata.State state) {
+      transaction.buffer(createUpdateMutationFrom(partitionToken, state));
+      return null;
     }
 
-    // TODO: Implement
-    public long delete(String partitionToken) {
-      throw new UnsupportedOperationException("Unimplemented");
+    public Void delete(String partitionToken) {
+      transaction.buffer(createDeleteMutationFrom(partitionToken));
+      return null;
     }
 
-    // TODO: Implement
     public long countPartitionsInStates(
-        List<String> partitionTokens,
-        List<PartitionMetadata.State> states
-    ) {
-      throw new UnsupportedOperationException("Unimplemented");
+        List<String> partitionTokens, List<PartitionMetadata.State> states) {
+      try (final ResultSet resultSet =
+          transaction.executeQuery(
+              Statement.newBuilder(
+                  "SELECT COUNT(*)"
+                      + " FROM " + tableName
+                      + " WHERE "
+                      + COLUMN_PARTITION_TOKEN
+                      + " IN UNNEST (@partitions)"
+                      + " AND "
+                      + COLUMN_STATE
+                      + " IN UNNEST (@states)")
+                  .bind("partitions")
+                  .toStringArray(partitionTokens)
+                  .bind("states")
+                  .toStringArray(states.stream().map(State::toString).collect(Collectors.toList()))
+                  .build())) {
+        resultSet.next();
+        return resultSet.getLong(0);
+      }
     }
 
-    private Mutation insertMutationFrom(
-        String tableName,
-        PartitionMetadata partitionMetadata) {
+    private Mutation createInsertMutationFrom(PartitionMetadata partitionMetadata) {
       return Mutation.newInsertBuilder(tableName)
           .set(COLUMN_PARTITION_TOKEN)
           .to(partitionMetadata.getPartitionToken())
@@ -134,6 +194,19 @@ public class PartitionMetadataDao {
           .set(COLUMN_UPDATED_AT)
           .to(Value.COMMIT_TIMESTAMP)
           .build();
+    }
+
+    private Mutation createUpdateMutationFrom(String partitionToken, State state) {
+      return Mutation.newUpdateBuilder(tableName)
+          .set(COLUMN_PARTITION_TOKEN)
+          .to(partitionToken)
+          .set(COLUMN_STATE)
+          .to(state.toString())
+          .build();
+    }
+
+    private Mutation createDeleteMutationFrom(String partitionToken) {
+      return Mutation.delete(tableName, Key.of(partitionToken));
     }
   }
 }
