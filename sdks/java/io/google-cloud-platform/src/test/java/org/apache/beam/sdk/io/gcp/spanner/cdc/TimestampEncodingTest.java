@@ -100,12 +100,12 @@ public class TimestampEncodingTest {
   @Test
   public void testReadAndWriteClassWithTimestampField() throws IOException {
     final AvroCoder<TestTimestamp> coder = AvroCoder.of(TestTimestamp.class);
-    final List<TestTimestamp> allExpected = Arrays.asList(
-        new TestTimestamp(Timestamp.MIN_VALUE, Timestamp.MAX_VALUE),
-        new TestTimestamp(Timestamp.ofTimeSecondsAndNanos(123L, 456), Timestamp.now()),
-        new TestTimestamp(Timestamp.MIN_VALUE, null),
-        new TestTimestamp(null, Timestamp.MAX_VALUE)
-    );
+    final List<TestTimestamp> allExpected =
+        Arrays.asList(
+            new TestTimestamp(Timestamp.MIN_VALUE, Timestamp.MAX_VALUE),
+            new TestTimestamp(Timestamp.ofTimeSecondsAndNanos(123L, 456), Timestamp.now()),
+            new TestTimestamp(Timestamp.MIN_VALUE, null),
+            new TestTimestamp(null, Timestamp.MAX_VALUE));
     final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
     for (TestTimestamp testTimestamp : allExpected) {
@@ -143,8 +143,8 @@ public class TimestampEncodingTest {
         return false;
       }
       TestTimestamp that = (TestTimestamp) o;
-      return Objects.equals(timestamp1, that.timestamp1) && Objects
-          .equals(timestamp2, that.timestamp2);
+      return Objects.equals(timestamp1, that.timestamp1)
+          && Objects.equals(timestamp2, that.timestamp2);
     }
 
     @Override

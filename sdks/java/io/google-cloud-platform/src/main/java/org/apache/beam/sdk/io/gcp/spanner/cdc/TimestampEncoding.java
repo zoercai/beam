@@ -57,7 +57,7 @@ public class TimestampEncoding extends CustomEncoding<Timestamp> {
 
   @Override
   protected Timestamp read(Object reuse, Decoder in) throws IOException {
-    final long seconds =in.readLong();
+    final long seconds = in.readLong();
     final int nanos = in.readInt();
     if (seconds < 0 && nanos < 0) {
       return null;
