@@ -17,6 +17,8 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc.actions;
 
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.CdcMetrics.PARTITIONS_PROCESSING_COUNTER;
+
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionPosition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestriction;
@@ -40,6 +42,8 @@ public class DonePartitionAction {
     }
 
     LOG.info("Done partition action completed successfully");
+    PARTITIONS_PROCESSING_COUNTER.dec();
+
     return ProcessContinuation.stop();
   }
 }
