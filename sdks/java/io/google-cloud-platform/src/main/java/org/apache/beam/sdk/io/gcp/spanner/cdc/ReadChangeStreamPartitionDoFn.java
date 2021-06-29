@@ -26,7 +26,7 @@ import java.util.Optional;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ActionFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ChildPartitionsRecordAction;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DataChangesRecordAction;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DataChangeRecordAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DeletePartitionAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DonePartitionAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.FinishPartitionAction;
@@ -40,7 +40,7 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.ChangeStreamRecordMapper;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.MapperFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChangeStreamRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangeRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.HeartbeatRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode;
@@ -60,7 +60,7 @@ import org.slf4j.MDC;
 
 // TODO: Add java docs
 @UnboundedPerElement
-public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataChangesRecord>
+public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataChangeRecord>
     implements Serializable {
 
   private static final long serialVersionUID = -7574596218085711975L;
@@ -77,7 +77,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private transient FinishPartitionAction finishPartitionAction;
   private transient WaitForParentPartitionsAction waitForParentPartitionsAction;
   private transient DeletePartitionAction deletePartitionAction;
-  private transient DataChangesRecordAction dataChangesRecordAction;
+  private transient DataChangeRecordAction dataChangeRecordAction;
   private transient HeartbeatRecordAction heartbeatRecordAction;
   private transient ChildPartitionsRecordAction childPartitionsRecordAction;
   private transient DonePartitionAction donePartitionAction;
@@ -133,7 +133,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
     this.deletePartitionAction = actionFactory.deletePartitionAction(partitionMetadataDao);
     this.donePartitionAction = actionFactory.donePartitionAction();
 
-    this.dataChangesRecordAction = actionFactory.dataChangesRecordAction();
+    this.dataChangeRecordAction = actionFactory.dataChangeRecordAction();
     this.heartbeatRecordAction = actionFactory.heartbeatRecordAction();
     this.childPartitionsRecordAction =
         actionFactory.childPartitionsRecordAction(
@@ -146,7 +146,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   public ProcessContinuation processElement(
       @Element PartitionMetadata partition,
       RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
-      OutputReceiver<DataChangesRecord> receiver,
+      OutputReceiver<DataChangeRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator) {
     MDC.put("partitionToken", partition.getPartitionToken());
     LOG.info(
@@ -215,7 +215,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private ProcessContinuation queryChangeStream(
       PartitionMetadata partition,
       RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
-      OutputReceiver<DataChangesRecord> receiver,
+      OutputReceiver<DataChangeRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator) {
     try (ResultSet resultSet =
         changeStreamDao.changeStreamQuery(
@@ -234,10 +234,10 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
 
         Optional<ProcessContinuation> maybeContinuation;
         for (ChangeStreamRecord record : records) {
-          if (record instanceof DataChangesRecord) {
+          if (record instanceof DataChangeRecord) {
             maybeContinuation =
-                dataChangesRecordAction.run(
-                    (DataChangesRecord) record, tracker, receiver, watermarkEstimator);
+                dataChangeRecordAction.run(
+                    (DataChangeRecord) record, tracker, receiver, watermarkEstimator);
           } else if (record instanceof HeartbeatRecord) {
             maybeContinuation =
                 heartbeatRecordAction.run((HeartbeatRecord) record, tracker, watermarkEstimator);

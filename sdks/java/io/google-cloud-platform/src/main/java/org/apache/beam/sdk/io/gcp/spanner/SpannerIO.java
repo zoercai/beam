@@ -62,7 +62,7 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ActionFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.DaoFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.MapperFactory;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangeRecord;
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Distribution;
 import org.apache.beam.sdk.metrics.Metrics;
@@ -1276,7 +1276,7 @@ public class SpannerIO {
 
   @AutoValue
   public abstract static class ReadChangeStream
-      extends PTransform<PBegin, PCollection<DataChangesRecord>> {
+      extends PTransform<PBegin, PCollection<DataChangeRecord>> {
 
     abstract SpannerConfig getSpannerConfig();
 
@@ -1368,7 +1368,7 @@ public class SpannerIO {
     }
 
     @Override
-    public PCollection<DataChangesRecord> expand(PBegin input) {
+    public PCollection<DataChangeRecord> expand(PBegin input) {
       checkArgument(
           getSpannerConfig() != null,
           "SpannerIO.readChangeStream() requires the spanner config to be set.");
