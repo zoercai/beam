@@ -17,8 +17,6 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.CdcMetrics.PARTITIONS_PROCESSING_COUNTER;
-
 import com.google.cloud.spanner.ResultSet;
 import java.io.Serializable;
 import java.util.List;
@@ -154,7 +152,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
             + partition.getPartitionToken()
             + " with restriction "
             + tracker.currentRestriction());
-    PARTITIONS_PROCESSING_COUNTER.inc();
 
     switch (tracker.currentRestriction().getMode()) {
       case QUERY_CHANGE_STREAM:

@@ -20,22 +20,18 @@ package org.apache.beam.sdk.io.gcp.spanner.cdc;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.CdcMetrics.RECORD_COMMIT_TIMESTAMP_TO_EMITTED_MS;
 
 import java.io.Serializable;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangesRecord;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangeRecord;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 
-public class PostProcessingMetricsDoFn extends DoFn<DataChangesRecord, DataChangesRecord>
+public class PostProcessingMetricsDoFn extends DoFn<DataChangeRecord, DataChangeRecord>
     implements Serializable {
 
   @ProcessElement
-  public ProcessContinuation processElement(
-      DataChangesRecord dataChangesRecord
-  ) {
+  public void processElement(@Element DataChangeRecord dataChangesRecord) {
     RECORD_COMMIT_TIMESTAMP_TO_EMITTED_MS.update(
         new Duration(new Instant(dataChangesRecord.getCommitTimestamp().toSqlTimestamp().getTime()),
             new Instant()).getMillis());
-    return ProcessContinuation.resume();
   }
-
 }

@@ -27,9 +27,6 @@ public class CdcMetrics {
   public static final Counter PARTITIONS_DETECTED_COUNTER =
       Metrics.counter(ReadChangeStream.class, "partitions_detected");
 
-  public static final Counter PARTITIONS_PROCESSING_COUNTER =
-      Metrics.counter(ReadChangeStream.class, "partitions_processing");
-
   public static final Counter PARTITION_SPLIT_COUNTER =
       Metrics.counter(ReadChangeStream.class, "partition_split_count");
 
