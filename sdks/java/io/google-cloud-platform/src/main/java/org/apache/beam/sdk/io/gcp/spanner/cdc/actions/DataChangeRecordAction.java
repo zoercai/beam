@@ -48,8 +48,7 @@ public class DataChangeRecordAction {
     }
     // TODO: Ask about this, do we need to output with timestamp?
     outputReceiver.output(record);
-    Instant commitTimestampInstant = new Instant(commitTimestamp.toSqlTimestamp().getTime());
-    watermarkEstimator.setWatermark(commitTimestampInstant);
+    watermarkEstimator.setWatermark(new Instant(commitTimestamp.toSqlTimestamp().getTime()));
 
     LOG.info("Data record action completed successfully");
     return Optional.empty();
