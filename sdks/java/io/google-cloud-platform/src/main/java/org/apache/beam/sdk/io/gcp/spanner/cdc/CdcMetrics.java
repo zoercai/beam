@@ -36,6 +36,7 @@ public class CdcMetrics {
   public static final Distribution PARTITION_CREATED_TO_SCHEDULED_MS =
       Metrics.distribution(ReadChangeStream.class, "partition_created_to_scheduled_ms");
 
+  // TODO(zoc): add this correctly
   public static final Distribution WATERMARK_TO_LATEST_RECORD_COMMIT_TIMESTAMP_MS =
       Metrics.distribution(ReadChangeStream.class, "watermark_to_latest_record_commit_timestamp_ms");
 

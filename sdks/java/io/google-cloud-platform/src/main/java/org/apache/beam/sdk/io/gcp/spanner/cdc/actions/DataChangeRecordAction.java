@@ -17,8 +17,6 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc.actions;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.CdcMetrics.WATERMARK_TO_LATEST_RECORD_COMMIT_TIMESTAMP_MS;
-
 import com.google.cloud.Timestamp;
 import java.util.Optional;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangeRecord;
@@ -28,7 +26,6 @@ import org.apache.beam.sdk.transforms.DoFn.OutputReceiver;
 import org.apache.beam.sdk.transforms.DoFn.ProcessContinuation;
 import org.apache.beam.sdk.transforms.splittabledofn.ManualWatermarkEstimator;
 import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker;
-import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,8 +50,6 @@ public class DataChangeRecordAction {
     outputReceiver.output(record);
     Instant commitTimestampInstant = new Instant(commitTimestamp.toSqlTimestamp().getTime());
     watermarkEstimator.setWatermark(commitTimestampInstant);
-    WATERMARK_TO_LATEST_RECORD_COMMIT_TIMESTAMP_MS
-        .update(new Duration(watermarkEstimator.currentWatermark(), commitTimestampInstant).getMillis());
 
     LOG.info("Data record action completed successfully");
     return Optional.empty();
