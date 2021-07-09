@@ -38,6 +38,7 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DeletePartitionAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DonePartitionAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.FinishPartitionAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.HeartbeatRecordAction;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.QueryChangeStreamAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.WaitForChildPartitionsAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.WaitForParentPartitionsAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamDao;
@@ -78,19 +79,20 @@ public class ReadChangeStreamPartitionDoFnTest {
   private ChangeStreamDao changeStreamDao;
   private ReadChangeStreamPartitionDoFn doFn;
   private PartitionMetadata partition;
+  private PartitionRestriction restriction;
   private RestrictionTracker<PartitionRestriction, PartitionPosition> restrictionTracker;
   private OutputReceiver<DataChangeRecord> outputReceiver;
+  private ChangeStreamRecordMapper changeStreamRecordMapper;
   private ManualWatermarkEstimator<Instant> watermarkEstimator;
+  private DataChangeRecordAction dataChangeRecordAction;
+  private HeartbeatRecordAction heartbeatRecordAction;
+  private ChildPartitionsRecordAction childPartitionsRecordAction;
+  private QueryChangeStreamAction queryChangeStreamAction;
   private WaitForChildPartitionsAction waitForChildPartitionsAction;
   private FinishPartitionAction finishPartitionAction;
   private WaitForParentPartitionsAction waitForParentPartitionsAction;
   private DeletePartitionAction deletePartitionAction;
   private DonePartitionAction donePartitionAction;
-  private DataChangeRecordAction dataChangeRecordAction;
-  private HeartbeatRecordAction heartbeatRecordAction;
-  private ChildPartitionsRecordAction childPartitionsRecordAction;
-  private ChangeStreamRecordMapper changeStreamRecordMapper;
-  private PartitionRestriction restriction;
 
   @Before
   public void setUp() {
@@ -106,15 +108,22 @@ public class ReadChangeStreamPartitionDoFnTest {
     final ActionFactory actionFactory = mock(ActionFactory.class);
     final PartitionMetadataDao partitionMetadataDao = mock(PartitionMetadataDao.class);
     changeStreamDao = mock(ChangeStreamDao.class);
+    changeStreamRecordMapper = mock(ChangeStreamRecordMapper.class);
+    dataChangeRecordAction = mock(DataChangeRecordAction.class);
+    heartbeatRecordAction = mock(HeartbeatRecordAction.class);
+    childPartitionsRecordAction = mock(ChildPartitionsRecordAction.class);
+    queryChangeStreamAction =
+        new QueryChangeStreamAction(
+            changeStreamDao,
+            changeStreamRecordMapper,
+            dataChangeRecordAction,
+            heartbeatRecordAction,
+            childPartitionsRecordAction);
     waitForChildPartitionsAction = mock(WaitForChildPartitionsAction.class);
     finishPartitionAction = mock(FinishPartitionAction.class);
     waitForParentPartitionsAction = mock(WaitForParentPartitionsAction.class);
     deletePartitionAction = mock(DeletePartitionAction.class);
     donePartitionAction = mock(DonePartitionAction.class);
-    dataChangeRecordAction = mock(DataChangeRecordAction.class);
-    heartbeatRecordAction = mock(HeartbeatRecordAction.class);
-    childPartitionsRecordAction = mock(ChildPartitionsRecordAction.class);
-    changeStreamRecordMapper = mock(ChangeStreamRecordMapper.class);
 
     doFn =
         new ReadChangeStreamPartitionDoFn(spannerConfig, daoFactory, mapperFactory, actionFactory);
@@ -140,6 +149,18 @@ public class ReadChangeStreamPartitionDoFnTest {
     when(daoFactory.partitionMetadataDaoFrom(spannerConfig)).thenReturn(partitionMetadataDao);
     when(daoFactory.changeStreamDaoFrom(spannerConfig)).thenReturn(changeStreamDao);
     when(mapperFactory.changeStreamRecordMapper()).thenReturn(changeStreamRecordMapper);
+
+    when(actionFactory.dataChangeRecordAction()).thenReturn(dataChangeRecordAction);
+    when(actionFactory.heartbeatRecordAction()).thenReturn(heartbeatRecordAction);
+    when(actionFactory.childPartitionsRecordAction(partitionMetadataDao))
+        .thenReturn(childPartitionsRecordAction);
+    when(actionFactory.queryChangeStreamAction(
+            changeStreamDao,
+            changeStreamRecordMapper,
+            dataChangeRecordAction,
+            heartbeatRecordAction,
+            childPartitionsRecordAction))
+        .thenReturn(queryChangeStreamAction);
     when(actionFactory.waitForChildPartitionsAction(partitionMetadataDao, resumeDuration))
         .thenReturn(waitForChildPartitionsAction);
     when(actionFactory.finishPartitionAction(partitionMetadataDao))
@@ -149,10 +170,6 @@ public class ReadChangeStreamPartitionDoFnTest {
     when(actionFactory.deletePartitionAction(partitionMetadataDao))
         .thenReturn(deletePartitionAction);
     when(actionFactory.donePartitionAction()).thenReturn(donePartitionAction);
-    when(actionFactory.dataChangeRecordAction()).thenReturn(dataChangeRecordAction);
-    when(actionFactory.heartbeatRecordAction()).thenReturn(heartbeatRecordAction);
-    when(actionFactory.childPartitionsRecordAction(partitionMetadataDao))
-        .thenReturn(childPartitionsRecordAction);
 
     doFn.setup();
   }
