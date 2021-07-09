@@ -20,13 +20,10 @@ package org.apache.beam.sdk.io.gcp.spanner.cdc;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.CdcMetrics.PARTITIONS_DETECTED_COUNTER;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.CdcMetrics.PARTITION_CREATED_TO_SCHEDULED_MS;
 
-import com.google.cloud.spanner.DatabaseClient;
 import com.google.cloud.spanner.ResultSet;
-import com.google.cloud.spanner.Statement;
-import org.apache.beam.sdk.io.gcp.spanner.SpannerAccessor;
-import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State;
 import org.apache.beam.sdk.io.range.OffsetRange;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.DoFn.UnboundedPerElement;
@@ -57,23 +54,19 @@ import org.slf4j.LoggerFactory;
   "nullness" // TODO(https://issues.apache.org/jira/browse/BEAM-10402)
 })
 public class DetectNewPartitionsDoFn extends DoFn<ChangeStreamSourceDescriptor, PartitionMetadata> {
-  private static final Logger LOG = LoggerFactory.getLogger(DetectNewPartitionsDoFn.class);
-  private SpannerAccessor spannerAccessor;
-  private DatabaseClient databaseClient;
-  private SpannerConfig spannerConfig;
-  // TODO(hengfeng): Make this field configurable via constructor or spanner config.
-  private Duration resumeDuration = Duration.millis(100L);;
-  private String metadataTableName;
-  private PartitionMetadataDao partitionMetadataDao;
 
-  public DetectNewPartitionsDoFn(SpannerConfig config, String metadataTableName) {
-    this.spannerConfig = config;
-    this.metadataTableName = metadataTableName;
+  private static final Logger LOG = LoggerFactory.getLogger(DetectNewPartitionsDoFn.class);
+  // TODO(hengfeng): Make this field configurable via constructor or spanner config.
+  private Duration resumeDuration = Duration.millis(100L);
+  private final PartitionMetadataDao partitionMetadataDao;
+
+  public DetectNewPartitionsDoFn(PartitionMetadataDao partitionMetadataDao) {
+    this.partitionMetadataDao = partitionMetadataDao;
   }
 
   public DetectNewPartitionsDoFn(
-      SpannerConfig config, String metadataTableName, Duration resumeDuration) {
-    this(config, metadataTableName);
+      PartitionMetadataDao partitionMetadataDao, Duration resumeDuration) {
+    this(partitionMetadataDao);
     this.resumeDuration = resumeDuration;
   }
 
@@ -100,35 +93,16 @@ public class DetectNewPartitionsDoFn extends DoFn<ChangeStreamSourceDescriptor, 
     return new OffsetRangeTracker(new OffsetRange(restriction.getFrom(), restriction.getTo()));
   }
 
-  @Setup
-  public void setup() throws Exception {
-    this.spannerAccessor = SpannerAccessor.getOrCreate(this.spannerConfig);
-    this.databaseClient = spannerAccessor.getDatabaseClient();
-    this.partitionMetadataDao =
-        new PartitionMetadataDao(this.metadataTableName, this.databaseClient);
-  }
-
-  @Teardown
-  public void teardown() throws Exception {
-    this.spannerAccessor.close();
-  }
-
   @ProcessElement
   public ProcessContinuation processElement(
       @Element ChangeStreamSourceDescriptor inputElement,
       RestrictionTracker<OffsetRange, Long> tracker,
       WatermarkEstimator watermarkEstimator,
       OutputReceiver<PartitionMetadata> receiver) {
-
     Instant start = Instant.now();
-
     LOG.debug("Calling process element:" + start);
 
-    // Find all records where their states are CREATED.
-    // TODO(hengfeng): move this to DAO.
-    String query =
-        String.format("SELECT * FROM `%s` WHERE State = 'CREATED'", this.metadataTableName);
-    try (ResultSet resultSet = this.databaseClient.singleUse().executeQuery(Statement.of(query))) {
+    try (ResultSet resultSet = partitionMetadataDao.getPartitionsInState(State.CREATED)) {
       long currentIndex = tracker.currentRestriction().getFrom();
 
       // Output the records.
@@ -144,7 +118,6 @@ public class DetectNewPartitionsDoFn extends DoFn<ChangeStreamSourceDescriptor, 
         PARTITION_CREATED_TO_SCHEDULED_MS.update(
             new Duration(metadata.getCreatedAt().toDate().getTime(), Instant.now().getMillis())
                 .getMillis());
-
         LOG.debug(
             String.format(
                 "Get partition metadata currentIndex:%d meta:%s", currentIndex, metadata));
@@ -156,41 +129,18 @@ public class DetectNewPartitionsDoFn extends DoFn<ChangeStreamSourceDescriptor, 
         LOG.info("Scheduling partition: " + metadata);
         receiver.output(metadata);
 
-        // TODO(hengfeng): investigate if we can move this to DAO.
-        this.databaseClient
-            .readWriteTransaction()
-            .run(
-                transaction -> {
-                  // Update the record to SCHEDULED.
-                  // TODO(hengfeng): use mutations instead.
-                  Statement updateStatement =
-                      Statement.newBuilder(
-                              String.format(
-                                  "UPDATE `%s` "
-                                      + "SET State = 'SCHEDULED' "
-                                      + "WHERE PartitionToken = @PartitionToken",
-                                  this.metadataTableName))
-                          .bind("PartitionToken")
-                          .to(metadata.getPartitionToken())
-                          .build();
-                  transaction.executeUpdate(updateStatement);
-                  LOG.debug("Updated the record:" + metadata.getPartitionToken());
-                  return null;
-                });
+        partitionMetadataDao.updateState(metadata.getPartitionToken(), State.SCHEDULED);
+        LOG.debug("Updated the record:" + metadata.getPartitionToken());
       }
     }
 
-    // If there are no partitions in the table, we should stop this SDF
-    // function.
-    // TODO(hengfeng): move this query to DAO.
-    query = String.format("SELECT COUNT(*) FROM `%s`", this.metadataTableName);
-    try (ResultSet resultSet = this.databaseClient.singleUse().executeQuery(Statement.of(query))) {
-      if (resultSet.next() && resultSet.getLong(0) == 0) {
-        if (!tracker.tryClaim(tracker.currentRestriction().getTo() - 1)) {
-          LOG.warn("Failed to claim the end of range in DetectNewPartitionsDoFn.");
-        }
-        return ProcessContinuation.stop();
+    // If there are no partitions in the table, we should stop this SDF function.
+    long numOfPartitions = partitionMetadataDao.countPartitions();
+    if (numOfPartitions == 0) {
+      if (!tracker.tryClaim(tracker.currentRestriction().getTo() - 1)) {
+        LOG.warn("Failed to claim the end of range in DetectNewPartitionsDoFn.");
       }
+      return ProcessContinuation.stop();
     }
     return ProcessContinuation.resume().withResumeDelay(resumeDuration);
   }
