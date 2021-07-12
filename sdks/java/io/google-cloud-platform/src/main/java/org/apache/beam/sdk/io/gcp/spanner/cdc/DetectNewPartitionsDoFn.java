@@ -126,9 +126,11 @@ public class DetectNewPartitionsDoFn extends DoFn<ChangeStreamSourceDescriptor, 
           INITIAL_PARTITION_CREATED_TO_SCHEDULED_MS.update(
               new Duration(metadata.getCreatedAt().toDate().getTime(), Instant.now().getMillis())
                   .getMillis());
-        } else {PARTITION_CREATED_TO_SCHEDULED_MS.update(
-            new Duration(metadata.getCreatedAt().toDate().getTime(), Instant.now().getMillis())
-                .getMillis());}
+        } else {
+          PARTITION_CREATED_TO_SCHEDULED_MS.update(
+              new Duration(metadata.getCreatedAt().toDate().getTime(), Instant.now().getMillis())
+                  .getMillis());
+        }
         LOG.debug(
             String.format(
                 "Get partition metadata currentIndex:%d meta:%s", currentIndex, metadata));
