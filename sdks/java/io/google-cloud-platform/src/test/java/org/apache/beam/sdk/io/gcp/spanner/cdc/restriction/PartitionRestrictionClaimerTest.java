@@ -223,7 +223,7 @@ public class PartitionRestrictionClaimerTest {
         case DONE:
           return PartitionRestriction.done(startTimestamp, endTimestamp);
         case STOP:
-          return PartitionRestriction.stop(startTimestamp, endTimestamp);
+          return PartitionRestriction.stop(PartitionRestriction.queryChangeStream(startTimestamp, endTimestamp));
         default:
           throw new IllegalArgumentException("Unknown mode " + mode);
       }

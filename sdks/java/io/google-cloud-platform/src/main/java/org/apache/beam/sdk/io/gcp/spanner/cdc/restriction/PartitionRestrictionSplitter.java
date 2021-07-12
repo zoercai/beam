@@ -66,13 +66,14 @@ public class PartitionRestrictionSplitter {
         // restriction gets scheduled before the primary.
         splitResult =
             SplitResult.of(
-                PartitionRestriction.stop(startTimestamp, endTimestamp),
+                PartitionRestriction.stop(restriction),
                 PartitionRestriction.waitForChildPartitions(startTimestamp, endTimestamp));
         break;
       case FINISH_PARTITION:
         splitResult =
             SplitResult.of(
-                PartitionRestriction.stop(startTimestamp, endTimestamp), PartitionRestriction.waitForParentPartitions(startTimestamp, endTimestamp));
+                PartitionRestriction.stop(restriction),
+                PartitionRestriction.waitForParentPartitions(startTimestamp, endTimestamp));
         break;
       case WAIT_FOR_PARENT_PARTITIONS:
         // If we need to split the wait for parent partitions, we remain at the same mode. That is
@@ -80,10 +81,13 @@ public class PartitionRestrictionSplitter {
         // restriction gets scheduled before the primary.
         splitResult =
             SplitResult.of(
-                PartitionRestriction.stop(startTimestamp, endTimestamp), PartitionRestriction.waitForParentPartitions(startTimestamp, endTimestamp));
+                PartitionRestriction.stop(restriction),
+                PartitionRestriction.waitForParentPartitions(startTimestamp, endTimestamp));
         break;
       case DELETE_PARTITION:
-        splitResult = SplitResult.of(PartitionRestriction.stop(startTimestamp, endTimestamp), PartitionRestriction.done(startTimestamp, endTimestamp));
+        splitResult = SplitResult.of(
+            PartitionRestriction.stop(restriction),
+            PartitionRestriction.done(startTimestamp, endTimestamp));
         break;
       case DONE:
         return null;

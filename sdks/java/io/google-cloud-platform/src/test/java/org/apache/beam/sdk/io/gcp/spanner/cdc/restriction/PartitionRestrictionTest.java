@@ -45,44 +45,46 @@ public class PartitionRestrictionTest {
   public void testQueryChangeStreamRestriction() {
     assertEquals(
         PartitionRestriction.queryChangeStream(startTimestamp, endTimestamp),
-        new PartitionRestriction(startTimestamp, endTimestamp, QUERY_CHANGE_STREAM));
+        new PartitionRestriction(startTimestamp, endTimestamp, QUERY_CHANGE_STREAM, null));
   }
 
   @Test
   public void testWaitForChildPartitionsRestriction() {
     assertEquals(
         PartitionRestriction.waitForChildPartitions(startTimestamp, endTimestamp),
-        new PartitionRestriction(startTimestamp, endTimestamp, WAIT_FOR_CHILD_PARTITIONS));
+        new PartitionRestriction(startTimestamp, endTimestamp, WAIT_FOR_CHILD_PARTITIONS, null));
   }
 
   @Test
   public void testFinishPartitionRestriction() {
     assertEquals(
         PartitionRestriction.finishPartition(startTimestamp, endTimestamp),
-        new PartitionRestriction(startTimestamp, endTimestamp, FINISH_PARTITION));
+        new PartitionRestriction(startTimestamp, endTimestamp, FINISH_PARTITION, null));
   }
 
   @Test
   public void testWaitForParentPartitionsRestriction() {
     assertEquals(
         PartitionRestriction.waitForParentPartitions(startTimestamp, endTimestamp),
-        new PartitionRestriction(startTimestamp, endTimestamp, WAIT_FOR_PARENT_PARTITIONS));
+        new PartitionRestriction(startTimestamp, endTimestamp, WAIT_FOR_PARENT_PARTITIONS, null));
   }
 
   @Test
   public void testDeletePartitionRestriction() {
     assertEquals(
         PartitionRestriction.deletePartition(startTimestamp, endTimestamp),
-        new PartitionRestriction(startTimestamp, endTimestamp, DELETE_PARTITION));
+        new PartitionRestriction(startTimestamp, endTimestamp, DELETE_PARTITION, null));
   }
 
   @Test
   public void testDoneRestriction() {
-    assertEquals(PartitionRestriction.done(startTimestamp, endTimestamp), new PartitionRestriction(startTimestamp, endTimestamp, DONE));
+    assertEquals(PartitionRestriction.done(startTimestamp, endTimestamp), new PartitionRestriction(startTimestamp, endTimestamp, DONE, null));
   }
 
   @Test
   public void testStopRestriction() {
-    assertEquals(PartitionRestriction.stop(startTimestamp, endTimestamp), new PartitionRestriction(startTimestamp, endTimestamp, STOP));
+    final PartitionRestriction restriction = PartitionRestriction
+        .queryChangeStream(startTimestamp, endTimestamp);
+    assertEquals(PartitionRestriction.stop(restriction), new PartitionRestriction(startTimestamp, endTimestamp, STOP, QUERY_CHANGE_STREAM));
   }
 }

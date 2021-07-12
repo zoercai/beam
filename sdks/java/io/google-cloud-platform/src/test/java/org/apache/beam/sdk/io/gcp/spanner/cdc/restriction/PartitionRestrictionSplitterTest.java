@@ -118,7 +118,7 @@ public class PartitionRestrictionSplitterTest {
         splitter.trySplit(0D, true, position, restriction);
 
     assertEquals(
-        SplitResult.of(PartitionRestriction.stop(startTimestamp, endTimestamp), PartitionRestriction.waitForChildPartitions(startTimestamp, endTimestamp)),
+        SplitResult.of(PartitionRestriction.stop(restriction), PartitionRestriction.waitForChildPartitions(startTimestamp, endTimestamp)),
         splitResult);
   }
 
@@ -130,7 +130,7 @@ public class PartitionRestrictionSplitterTest {
         splitter.trySplit(0D, true, position, restriction);
 
     assertEquals(
-        SplitResult.of(PartitionRestriction.stop(startTimestamp, endTimestamp), PartitionRestriction.waitForParentPartitions(startTimestamp, endTimestamp)),
+        SplitResult.of(PartitionRestriction.stop(restriction), PartitionRestriction.waitForParentPartitions(startTimestamp, endTimestamp)),
         splitResult);
   }
 
@@ -142,7 +142,7 @@ public class PartitionRestrictionSplitterTest {
         splitter.trySplit(0D, true, position, restriction);
 
     assertEquals(
-        SplitResult.of(PartitionRestriction.stop(startTimestamp, endTimestamp), PartitionRestriction.waitForParentPartitions(startTimestamp, endTimestamp)),
+        SplitResult.of(PartitionRestriction.stop(restriction), PartitionRestriction.waitForParentPartitions(startTimestamp, endTimestamp)),
         splitResult);
   }
 
@@ -154,7 +154,7 @@ public class PartitionRestrictionSplitterTest {
         splitter.trySplit(0D, true, position, restriction);
 
     assertEquals(
-        SplitResult.of(PartitionRestriction.stop(startTimestamp, endTimestamp), PartitionRestriction.done(startTimestamp, endTimestamp)), splitResult);
+        SplitResult.of(PartitionRestriction.stop(restriction), PartitionRestriction.done(startTimestamp, endTimestamp)), splitResult);
   }
 
   @Test
