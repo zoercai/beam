@@ -45,32 +45,26 @@ public class PartitionRestriction implements Serializable {
   }
 
   public static PartitionRestriction waitForChildPartitions(
-      Timestamp startTimestamp, Timestamp endTimestamp
-  ) {
+      Timestamp startTimestamp, Timestamp endTimestamp) {
     return new PartitionRestriction(startTimestamp, endTimestamp, WAIT_FOR_CHILD_PARTITIONS, null);
   }
 
   public static PartitionRestriction finishPartition(
-      Timestamp startTimestamp, Timestamp endTimestamp
-  ) {
+      Timestamp startTimestamp, Timestamp endTimestamp) {
     return new PartitionRestriction(startTimestamp, endTimestamp, FINISH_PARTITION, null);
   }
 
   public static PartitionRestriction waitForParentPartitions(
-      Timestamp startTimestamp, Timestamp endTimestamp
-  ) {
+      Timestamp startTimestamp, Timestamp endTimestamp) {
     return new PartitionRestriction(startTimestamp, endTimestamp, WAIT_FOR_PARENT_PARTITIONS, null);
   }
 
   public static PartitionRestriction deletePartition(
-      Timestamp startTimestamp, Timestamp endTimestamp
-  ) {
+      Timestamp startTimestamp, Timestamp endTimestamp) {
     return new PartitionRestriction(startTimestamp, endTimestamp, DELETE_PARTITION, null);
   }
 
-  public static PartitionRestriction done(
-      Timestamp startTimestamp, Timestamp endTimestamp
-  ) {
+  public static PartitionRestriction done(Timestamp startTimestamp, Timestamp endTimestamp) {
     return new PartitionRestriction(startTimestamp, endTimestamp, DONE, null);
   }
 
@@ -79,12 +73,14 @@ public class PartitionRestriction implements Serializable {
         restriction.getStartTimestamp(),
         restriction.getEndTimestamp(),
         STOP,
-        restriction.getMode()
-    );
+        restriction.getMode());
   }
 
   public PartitionRestriction(
-      Timestamp startTimestamp, Timestamp endTimestamp, PartitionMode mode, PartitionMode stoppedMode) {
+      Timestamp startTimestamp,
+      Timestamp endTimestamp,
+      PartitionMode mode,
+      PartitionMode stoppedMode) {
     this.startTimestamp = startTimestamp;
     this.endTimestamp = endTimestamp;
     this.mode = mode;
@@ -116,8 +112,9 @@ public class PartitionRestriction implements Serializable {
       return false;
     }
     PartitionRestriction that = (PartitionRestriction) o;
-    return Objects.equals(startTimestamp, that.startTimestamp) && Objects
-        .equals(endTimestamp, that.endTimestamp) && mode == that.mode
+    return Objects.equals(startTimestamp, that.startTimestamp)
+        && Objects.equals(endTimestamp, that.endTimestamp)
+        && mode == that.mode
         && stoppedMode == that.stoppedMode;
   }
 
@@ -128,11 +125,15 @@ public class PartitionRestriction implements Serializable {
 
   @Override
   public String toString() {
-    return "PartitionRestriction{" +
-        "startTimestamp=" + startTimestamp +
-        ", endTimestamp=" + endTimestamp +
-        ", mode=" + mode +
-        ", stoppedMode=" + stoppedMode +
-        '}';
+    return "PartitionRestriction{"
+        + "startTimestamp="
+        + startTimestamp
+        + ", endTimestamp="
+        + endTimestamp
+        + ", mode="
+        + mode
+        + ", stoppedMode="
+        + stoppedMode
+        + '}';
   }
 }

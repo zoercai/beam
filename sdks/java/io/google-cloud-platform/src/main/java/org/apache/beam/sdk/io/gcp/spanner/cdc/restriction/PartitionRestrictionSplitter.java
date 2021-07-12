@@ -85,9 +85,10 @@ public class PartitionRestrictionSplitter {
                 PartitionRestriction.waitForParentPartitions(startTimestamp, endTimestamp));
         break;
       case DELETE_PARTITION:
-        splitResult = SplitResult.of(
-            PartitionRestriction.stop(restriction),
-            PartitionRestriction.done(startTimestamp, endTimestamp));
+        splitResult =
+            SplitResult.of(
+                PartitionRestriction.stop(restriction),
+                PartitionRestriction.done(startTimestamp, endTimestamp));
         break;
       case DONE:
         return null;

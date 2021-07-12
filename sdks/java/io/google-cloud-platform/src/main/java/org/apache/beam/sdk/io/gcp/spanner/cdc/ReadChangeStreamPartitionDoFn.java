@@ -109,9 +109,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   public PartitionRestriction initialRestriction(@Element PartitionMetadata partition) {
     LOG.info("[" + partition.getPartitionToken() + "] Initial restriction");
     return PartitionRestriction.queryChangeStream(
-        partition.getStartTimestamp(),
-        partition.getEndTimestamp()
-    );
+        partition.getStartTimestamp(), partition.getEndTimestamp());
   }
 
   @NewTracker

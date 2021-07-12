@@ -1,11 +1,13 @@
 /*
- * Copyright 2021 Google LLC
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,7 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.TimestampConverter.timestampToMicros;
@@ -37,14 +38,12 @@ public class PartitionRestrictionProgressChecker {
   private static final BigDecimal TOTAL_MODE_TRANSITIONS = BigDecimal.valueOf(5L);
 
   /**
-   * Indicates the work left from mode transitions (including the current state). The transitions
-   * are as follows: (1) QUERY_CHANGE_STREAM, (2) WAIT_FOR_CHILD_PARTITIONS, (3) FINISH_PARTITION,
+   * Indicates how many mode transitions have been completed for the current mode. The transitions
+   * are as follows: * (1) QUERY_CHANGE_STREAM, (2) WAIT_FOR_CHILD_PARTITIONS, (3) FINISH_PARTITION,
    * (4) WAIT_FOR_PARENT_PARTITIONS, (5) DELETE_PARTITION, (6) DONE.
    *
-   * - QUERY_CHANGE_STREAM: 6 mode transitions until done. - WAIT_FOR_CHILD_PARTITIONS: 5 mode
-   * transitions until done. - FINISH_PARTITION: 4 mode transitions until done. -
-   * WAIT_FOR_PARENT_PARTITIONS: 3 mode transitions until done. - DELETE_PARTITION: 2 mode
-   * transitions until done.
+   * <p>This is used to calculate the units of work left, meaning that 1 transition = 1 unit of
+   * work.
    */
   private final Map<PartitionMode, BigDecimal> modeToTransitionsCompleted;
 
@@ -59,30 +58,33 @@ public class PartitionRestrictionProgressChecker {
   }
 
   public Progress getProgress(
-      PartitionRestriction restriction,
-      PartitionPosition lastClaimedPosition) {
-    final PartitionMode currentMode = Optional
-        .ofNullable(lastClaimedPosition)
-        .map(PartitionPosition::getMode)
-        .orElse(restriction.getMode() == STOP ? restriction.getStoppedMode() : restriction.getMode());
-    final BigDecimal transitionsCompleted = modeToTransitionsCompleted
-        .getOrDefault(currentMode, BigDecimal.ZERO);
+      PartitionRestriction restriction, PartitionPosition lastClaimedPosition) {
+    final PartitionMode currentMode =
+        Optional.ofNullable(lastClaimedPosition)
+            .map(PartitionPosition::getMode)
+            .orElse(
+                restriction.getMode() == STOP
+                    ? restriction.getStoppedMode()
+                    : restriction.getMode());
+    final BigDecimal transitionsCompleted =
+        modeToTransitionsCompleted.getOrDefault(currentMode, BigDecimal.ZERO);
 
     final BigDecimal startTimestampAsMicros = timestampToMicros(restriction.getStartTimestamp());
     final BigDecimal endTimestampAsMicros = timestampToMicros(restriction.getEndTimestamp());
-    final BigDecimal currentTimestampAsMicros = Optional
-        .ofNullable(lastClaimedPosition)
-        .flatMap(PartitionPosition::getTimestamp)
-        .map(TimestampConverter::timestampToMicros)
-        .orElse(currentMode == QUERY_CHANGE_STREAM ? startTimestampAsMicros : endTimestampAsMicros);
+    final BigDecimal currentTimestampAsMicros =
+        Optional.ofNullable(lastClaimedPosition)
+            .flatMap(PartitionPosition::getTimestamp)
+            .map(TimestampConverter::timestampToMicros)
+            .orElse(
+                currentMode == QUERY_CHANGE_STREAM ? startTimestampAsMicros : endTimestampAsMicros);
 
-    final BigDecimal workCompleted = currentTimestampAsMicros
-        .subtract(startTimestampAsMicros)
-        .add(transitionsCompleted);
-    final BigDecimal workLeft = endTimestampAsMicros
-        .subtract(startTimestampAsMicros)
-        .add(TOTAL_MODE_TRANSITIONS)
-        .subtract(workCompleted);
+    final BigDecimal workCompleted =
+        currentTimestampAsMicros.subtract(startTimestampAsMicros).add(transitionsCompleted);
+    final BigDecimal workLeft =
+        endTimestampAsMicros
+            .subtract(startTimestampAsMicros)
+            .add(TOTAL_MODE_TRANSITIONS)
+            .subtract(workCompleted);
 
     return Progress.from(workCompleted.doubleValue(), workLeft.doubleValue());
   }

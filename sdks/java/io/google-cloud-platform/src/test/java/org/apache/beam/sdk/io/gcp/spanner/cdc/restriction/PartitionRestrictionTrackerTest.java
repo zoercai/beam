@@ -51,7 +51,9 @@ public class PartitionRestrictionTrackerTest {
     claimer = mock(PartitionRestrictionClaimer.class);
     splitChecker = mock(PartitionRestrictionSplitChecker.class);
     progressChecker = mock(PartitionRestrictionProgressChecker.class);
-    tracker = new PartitionRestrictionTracker(restriction, splitter, claimer, splitChecker, progressChecker);
+    tracker =
+        new PartitionRestrictionTracker(
+            restriction, splitter, claimer, splitChecker, progressChecker);
   }
 
   @Test
@@ -67,7 +69,9 @@ public class PartitionRestrictionTrackerTest {
   public void testIsSplitAllowedNonQueryChangeStreamInitialization() {
     Arrays.stream(PartitionMode.values())
         .filter(mode -> mode != QUERY_CHANGE_STREAM)
-        .map(mode -> new PartitionRestrictionTracker(new PartitionRestriction(null, null, mode, null)))
+        .map(
+            mode ->
+                new PartitionRestrictionTracker(new PartitionRestriction(null, null, mode, null)))
         .forEach(
             tracker ->
                 assertTrue(

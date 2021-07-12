@@ -78,13 +78,17 @@ public class PartitionRestrictionTest {
 
   @Test
   public void testDoneRestriction() {
-    assertEquals(PartitionRestriction.done(startTimestamp, endTimestamp), new PartitionRestriction(startTimestamp, endTimestamp, DONE, null));
+    assertEquals(
+        PartitionRestriction.done(startTimestamp, endTimestamp),
+        new PartitionRestriction(startTimestamp, endTimestamp, DONE, null));
   }
 
   @Test
   public void testStopRestriction() {
-    final PartitionRestriction restriction = PartitionRestriction
-        .queryChangeStream(startTimestamp, endTimestamp);
-    assertEquals(PartitionRestriction.stop(restriction), new PartitionRestriction(startTimestamp, endTimestamp, STOP, QUERY_CHANGE_STREAM));
+    final PartitionRestriction restriction =
+        PartitionRestriction.queryChangeStream(startTimestamp, endTimestamp);
+    assertEquals(
+        PartitionRestriction.stop(restriction),
+        new PartitionRestriction(startTimestamp, endTimestamp, STOP, QUERY_CHANGE_STREAM));
   }
 }
