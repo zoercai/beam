@@ -43,28 +43,40 @@ public class PartitionRestriction implements Serializable {
     return new PartitionRestriction(startTimestamp, endTimestamp, QUERY_CHANGE_STREAM);
   }
 
-  public static PartitionRestriction waitForChildPartitions() {
-    return new PartitionRestriction(null, null, WAIT_FOR_CHILD_PARTITIONS);
+  public static PartitionRestriction waitForChildPartitions(
+      Timestamp startTimestamp, Timestamp endTimestamp
+  ) {
+    return new PartitionRestriction(startTimestamp, endTimestamp, WAIT_FOR_CHILD_PARTITIONS);
   }
 
-  public static PartitionRestriction finishPartition() {
-    return new PartitionRestriction(null, null, FINISH_PARTITION);
+  public static PartitionRestriction finishPartition(
+      Timestamp startTimestamp, Timestamp endTimestamp
+  ) {
+    return new PartitionRestriction(startTimestamp, endTimestamp, FINISH_PARTITION);
   }
 
-  public static PartitionRestriction waitForParentPartitions() {
-    return new PartitionRestriction(null, null, WAIT_FOR_PARENT_PARTITIONS);
+  public static PartitionRestriction waitForParentPartitions(
+      Timestamp startTimestamp, Timestamp endTimestamp
+  ) {
+    return new PartitionRestriction(startTimestamp, endTimestamp, WAIT_FOR_PARENT_PARTITIONS);
   }
 
-  public static PartitionRestriction deletePartition() {
-    return new PartitionRestriction(null, null, DELETE_PARTITION);
+  public static PartitionRestriction deletePartition(
+      Timestamp startTimestamp, Timestamp endTimestamp
+  ) {
+    return new PartitionRestriction(startTimestamp, endTimestamp, DELETE_PARTITION);
   }
 
-  public static PartitionRestriction done() {
-    return new PartitionRestriction(null, null, DONE);
+  public static PartitionRestriction done(
+      Timestamp startTimestamp, Timestamp endTimestamp
+  ) {
+    return new PartitionRestriction(startTimestamp, endTimestamp, DONE);
   }
 
-  public static PartitionRestriction stop() {
-    return new PartitionRestriction(null, null, STOP);
+  public static PartitionRestriction stop(
+      Timestamp startTimestamp, Timestamp endTimestamp
+  ) {
+    return new PartitionRestriction(startTimestamp, endTimestamp, STOP);
   }
 
   public PartitionRestriction(
