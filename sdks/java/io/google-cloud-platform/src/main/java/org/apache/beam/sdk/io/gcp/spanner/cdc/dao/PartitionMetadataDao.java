@@ -115,7 +115,7 @@ public class PartitionMetadataDao {
 
   public ResultSet getPartitionsInState(State state) {
     Statement statement =
-        Statement.newBuilder("SELECT * FROM " + tableName + " WHERE State = '@state'")
+        Statement.newBuilder("SELECT * FROM " + tableName + " WHERE State = @state")
             .bind("state")
             .to(state.toString())
             .build();

@@ -21,6 +21,7 @@ import static org.apache.beam.sdk.io.gcp.spanner.cdc.CdcMetrics.PARTITIONS_DETEC
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.CdcMetrics.PARTITION_CREATED_TO_SCHEDULED_MS;
 
 import com.google.cloud.spanner.ResultSet;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.DaoFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.PartitionMetadata.State;
@@ -58,15 +59,15 @@ public class DetectNewPartitionsDoFn extends DoFn<ChangeStreamSourceDescriptor, 
   private static final Logger LOG = LoggerFactory.getLogger(DetectNewPartitionsDoFn.class);
   // TODO(hengfeng): Make this field configurable via constructor or spanner config.
   private Duration resumeDuration = Duration.millis(100L);
-  private final PartitionMetadataDao partitionMetadataDao;
+  private final DaoFactory daoFactory;
+  private transient PartitionMetadataDao partitionMetadataDao;
 
-  public DetectNewPartitionsDoFn(PartitionMetadataDao partitionMetadataDao) {
-    this.partitionMetadataDao = partitionMetadataDao;
+  public DetectNewPartitionsDoFn(DaoFactory daoFactory) {
+    this.daoFactory = daoFactory;
   }
 
-  public DetectNewPartitionsDoFn(
-      PartitionMetadataDao partitionMetadataDao, Duration resumeDuration) {
-    this(partitionMetadataDao);
+  public DetectNewPartitionsDoFn(DaoFactory daoFactory, Duration resumeDuration) {
+    this(daoFactory);
     this.resumeDuration = resumeDuration;
   }
 
@@ -91,6 +92,11 @@ public class DetectNewPartitionsDoFn extends DoFn<ChangeStreamSourceDescriptor, 
       @Element ChangeStreamSourceDescriptor inputElement, @Restriction OffsetRange restriction) {
     // FIXME: The end of the range should probably be Long.MAX_VALUE
     return new OffsetRangeTracker(new OffsetRange(restriction.getFrom(), restriction.getTo()));
+  }
+
+  @Setup
+  public void setup() {
+    this.partitionMetadataDao = daoFactory.getPartitionMetadataDao();
   }
 
   @ProcessElement

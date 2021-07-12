@@ -35,9 +35,13 @@ import com.google.cloud.spanner.SpannerExceptionFactory;
 import com.google.spanner.admin.database.v1.UpdateDatabaseDdlMetadata;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 // TODO: Add java docs
 public class PartitionMetadataAdminDao {
+
+  private static final int TIMEOUT_MINUTES = 10;
 
   private final DatabaseAdminClient databaseAdminClient;
   private final String instanceId;
@@ -86,9 +90,9 @@ public class PartitionMetadataAdminDao {
             instanceId, databaseId, Collections.singletonList(metadataCreateStmt), null);
     try {
       // Initiate the request which returns an OperationFuture.
-      op.get();
-    } catch (ExecutionException e) {
-      // If the operation failed during execution, expose the cause.
+      op.get(TIMEOUT_MINUTES, TimeUnit.MINUTES);
+    } catch (ExecutionException | TimeoutException e) {
+      // If the operation failed or timed out during execution, expose the cause.
       throw (SpannerException) e.getCause();
     } catch (InterruptedException e) {
       // Throw when a thread is waiting, sleeping, or otherwise occupied,

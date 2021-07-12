@@ -1428,7 +1428,7 @@ public class SpannerIO {
               partitionMetadataTableName);
 
       final DetectNewPartitionsDoFn detectNewPartitionsDoFn =
-          new DetectNewPartitionsDoFn(daoFactory.getPartitionMetadataDao());
+          new DetectNewPartitionsDoFn(daoFactory);
       final ReadChangeStreamPartitionDoFn readChangeStreamPartitionDoFn =
           new ReadChangeStreamPartitionDoFn(daoFactory, new MapperFactory(), new ActionFactory());
       final PostProcessingMetricsDoFn postProcessingMetricsDoFn = new PostProcessingMetricsDoFn();

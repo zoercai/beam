@@ -49,9 +49,9 @@ public class DaoFactory implements Serializable {
 
   // TODO: See if synchronized is a bottleneck and refactor if so
   public synchronized PartitionMetadataAdminDao getPartitionMetadataAdminDao() {
-    DatabaseAdminClient databaseAdminClient =
-        SpannerAccessor.getOrCreate(partitionMetadataSpannerConfig).getDatabaseAdminClient();
     if (partitionMetadataAdminDao == null) {
+      DatabaseAdminClient databaseAdminClient =
+          SpannerAccessor.getOrCreate(partitionMetadataSpannerConfig).getDatabaseAdminClient();
       partitionMetadataAdminDao =
           new PartitionMetadataAdminDao(
               databaseAdminClient,
