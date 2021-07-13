@@ -65,9 +65,10 @@ public class QueryChangeStreamAction {
       RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
       OutputReceiver<DataChangeRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator) {
+    final String token = partition.getPartitionToken();
     try (ResultSet resultSet =
         changeStreamDao.changeStreamQuery(
-            partition.getPartitionToken(),
+            token,
             tracker.currentRestriction().getStartTimestamp(),
             partition.isInclusiveStart(),
             partition.getEndTimestamp(),
@@ -77,7 +78,7 @@ public class QueryChangeStreamAction {
         // TODO: Check what should we do if there is an error here
         final List<ChangeStreamRecord> records =
             changeStreamRecordMapper.toChangeStreamRecords(
-                partition.getPartitionToken(), resultSet.getCurrentRowAsStruct());
+                token, resultSet.getCurrentRowAsStruct());
         LOG.debug("Mapped records: " + records);
 
         Optional<ProcessContinuation> maybeContinuation;
@@ -85,19 +86,22 @@ public class QueryChangeStreamAction {
           if (record instanceof DataChangeRecord) {
             maybeContinuation =
                 dataChangeRecordAction.run(
-                    (DataChangeRecord) record, tracker, receiver, watermarkEstimator);
+                    partition, (DataChangeRecord) record, tracker, receiver, watermarkEstimator);
           } else if (record instanceof HeartbeatRecord) {
             maybeContinuation =
-                heartbeatRecordAction.run((HeartbeatRecord) record, tracker, watermarkEstimator);
+                heartbeatRecordAction.run(
+                    partition, (HeartbeatRecord) record, tracker, watermarkEstimator);
           } else if (record instanceof ChildPartitionsRecord) {
             maybeContinuation =
                 childPartitionsRecordAction.run(
-                    (ChildPartitionsRecord) record, partition, tracker, watermarkEstimator);
+                    partition, (ChildPartitionsRecord) record, tracker, watermarkEstimator);
           } else {
+            LOG.error("[" + token + "] Unknown record type " + record.getClass());
             // FIXME: Check what should we do if the record is unknown
             throw new IllegalArgumentException("Unknown record type " + record.getClass());
           }
           if (maybeContinuation.isPresent()) {
+            LOG.info("[" + token + "] Continuation present, returning " + maybeContinuation);
             return maybeContinuation;
           }
         }

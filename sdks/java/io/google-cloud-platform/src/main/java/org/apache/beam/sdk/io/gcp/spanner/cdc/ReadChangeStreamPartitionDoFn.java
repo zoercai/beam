@@ -18,7 +18,6 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
 import java.io.Serializable;
-import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ActionFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ChildPartitionsRecordAction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.DataChangeRecordAction;
@@ -49,7 +48,6 @@ import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 
 // TODO: Add java docs
 @UnboundedPerElement
@@ -59,7 +57,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private static final long serialVersionUID = -7574596218085711975L;
   private static final Logger LOG = LoggerFactory.getLogger(ReadChangeStreamPartitionDoFn.class);
 
-  private final SpannerConfig spannerConfig;
   private final DaoFactory daoFactory;
   private final MapperFactory mapperFactory;
   private final ActionFactory actionFactory;
@@ -78,43 +75,47 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private transient DonePartitionAction donePartitionAction;
 
   public ReadChangeStreamPartitionDoFn(
-      SpannerConfig spannerConfig,
-      DaoFactory daoFactory,
-      MapperFactory mapperFactory,
-      ActionFactory actionFactory) {
-    this.spannerConfig = spannerConfig;
+      DaoFactory daoFactory, MapperFactory mapperFactory, ActionFactory actionFactory) {
     this.daoFactory = daoFactory;
     this.mapperFactory = mapperFactory;
     this.actionFactory = actionFactory;
   }
 
   @GetInitialWatermarkEstimatorState
-  public Instant getInitialWatermarkEstimatorState(@Timestamp Instant currentElementTimestamp) {
+  public Instant getInitialWatermarkEstimatorState(
+      @Element PartitionMetadata partition, @Timestamp Instant currentElementTimestamp) {
+    LOG.info("[" + partition.getPartitionToken() + "] Get initial watermark estimator");
     return currentElementTimestamp;
   }
 
   @NewWatermarkEstimator
   public ManualWatermarkEstimator<Instant> newWatermarkEstimator(
+      @Element PartitionMetadata partition,
       @WatermarkEstimatorState Instant watermarkEstimatorState) {
+    LOG.info("[" + partition.getPartitionToken() + "] New watermark estimator");
     return new Manual(watermarkEstimatorState);
   }
 
   @GetInitialRestriction
-  public PartitionRestriction initialRestriction(@Element PartitionMetadata element) {
+  public PartitionRestriction initialRestriction(@Element PartitionMetadata partition) {
+    LOG.info("[" + partition.getPartitionToken() + "] Initial restriction");
     return new PartitionRestriction(
-        element.getStartTimestamp(), element.getEndTimestamp(), PartitionMode.QUERY_CHANGE_STREAM);
+        partition.getStartTimestamp(),
+        partition.getEndTimestamp(),
+        PartitionMode.QUERY_CHANGE_STREAM);
   }
 
   @NewTracker
-  public PartitionRestrictionTracker newTracker(@Restriction PartitionRestriction restriction) {
+  public PartitionRestrictionTracker newTracker(
+      @Element PartitionMetadata partition, @Restriction PartitionRestriction restriction) {
+    LOG.info("[" + partition.getPartitionToken() + "] New tracker");
     return new PartitionRestrictionTracker(restriction);
   }
 
   @Setup
   public void setup() {
-    final PartitionMetadataDao partitionMetadataDao =
-        daoFactory.partitionMetadataDaoFrom(spannerConfig);
-    this.changeStreamDao = daoFactory.changeStreamDaoFrom(spannerConfig);
+    final PartitionMetadataDao partitionMetadataDao = daoFactory.getPartitionMetadataDao();
+    this.changeStreamDao = daoFactory.getChangeStreamDao();
     this.changeStreamRecordMapper = mapperFactory.changeStreamRecordMapper();
 
     this.dataChangeRecordAction = actionFactory.dataChangeRecordAction();
@@ -183,14 +184,11 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       RestrictionTracker<PartitionRestriction, PartitionPosition> tracker,
       OutputReceiver<DataChangeRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator) {
-    MDC.put("partitionToken", partition.getPartitionToken());
-    LOG.info(
-        "Processing element "
-            + partition.getPartitionToken()
-            + " with restriction "
-            + tracker.currentRestriction());
+    final String token = partition.getPartitionToken();
+    LOG.info("[" + token + "] Processing element with restriction " + tracker.currentRestriction());
 
-    switch (tracker.currentRestriction().getMode()) {
+    final PartitionMode mode = tracker.currentRestriction().getMode();
+    switch (mode) {
       case QUERY_CHANGE_STREAM:
         return queryChangeStream(partition, tracker, receiver, watermarkEstimator);
       case WAIT_FOR_CHILD_PARTITIONS:
@@ -205,8 +203,8 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
         return done(partition, tracker);
       default:
         // TODO: Verify what to do here
-        throw new IllegalArgumentException(
-            "Unknown mode " + tracker.currentRestriction().getMode());
+        LOG.error("[" + token + "] Unknown mode " + mode);
+        throw new IllegalArgumentException("Unknown mode " + mode);
     }
   }
 
