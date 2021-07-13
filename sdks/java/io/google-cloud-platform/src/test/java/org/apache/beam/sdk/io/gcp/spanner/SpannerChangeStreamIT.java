@@ -18,20 +18,12 @@
 package org.apache.beam.sdk.io.gcp.spanner;
 
 import com.google.cloud.Timestamp;
-import com.google.cloud.spanner.DatabaseAdminClient;
-import com.google.cloud.spanner.DatabaseClient;
-import com.google.cloud.spanner.DatabaseId;
-import com.google.cloud.spanner.Mutation;
 import com.google.cloud.spanner.Spanner;
 import com.google.cloud.spanner.SpannerOptions;
 import com.google.gson.Gson;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.extensions.gcp.options.GcpOptions;
 import org.apache.beam.sdk.io.common.IOITHelper;
 import org.apache.beam.sdk.io.common.IOTestPipelineOptions;
@@ -41,10 +33,8 @@ import org.apache.beam.sdk.options.Description;
 import org.apache.beam.sdk.options.StreamingOptions;
 import org.apache.beam.sdk.options.Validation;
 import org.apache.beam.sdk.options.ValueProvider.StaticValueProvider;
-import org.apache.beam.sdk.testing.PAssert;
 import org.apache.beam.sdk.testing.TestPipeline;
 import org.apache.beam.sdk.transforms.MapElements;
-import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.TypeDescriptors;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.AfterClass;
@@ -58,9 +48,6 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class SpannerChangeStreamIT {
 
-  private static final int MAX_TABLE_NAME_LENGTH = 128;
-  private static final int MAX_CHANGE_STREAM_NAME_LENGTH = 30;
-  private static final String TABLE_NAME_PREFIX = "Singers";
   public static final String SPANNER_HOST = "https://staging-wrenchworks.sandbox.googleapis.com";
 
   @Rule public final transient TestPipeline pipeline = TestPipeline.create();
@@ -74,13 +61,13 @@ public class SpannerChangeStreamIT {
     void setProjectId(String value);
 
     @Description("Instance ID to write to in Spanner")
-    @Default.String("test-instance")
+    @Default.String("change-stream-load-test-3")
     String getInstanceId();
 
     void setInstanceId(String value);
 
     @Description("Database ID prefix to write to in Spanner")
-    @Default.String("change-stream-demo")
+    @Default.String("load-test-change-stream-enable")
     String getDatabaseId();
 
     void setDatabaseId(String value);
@@ -93,15 +80,13 @@ public class SpannerChangeStreamIT {
     void setReadTimeout(Integer readTimeout);
   }
 
+  private static final String CHANGE_STREAM_NAME = "changeStreamAll";
+  private static final String METADATA_DATABASE = "change-stream-metadata";
   private static SpannerTestPipelineOptions options;
   private static String projectId;
   private static String instanceId;
   private static String databaseId;
-  private static String tableName;
-  private static String changeStreamName;
   private static Spanner spanner;
-  private static DatabaseAdminClient databaseAdminClient;
-  private static DatabaseClient databaseClient;
 
   @BeforeClass
   public static void setup() throws InterruptedException, ExecutionException, TimeoutException {
@@ -112,138 +97,59 @@ public class SpannerChangeStreamIT {
             : options.getProjectId();
     instanceId = options.getInstanceId();
     databaseId = options.getDatabaseId();
-    tableName = generateTableName();
-    changeStreamName = generateChangeStreamName();
     spanner =
         SpannerOptions.newBuilder()
             .setHost(SPANNER_HOST)
             .setProjectId(projectId)
             .build()
             .getService();
-    databaseAdminClient = spanner.getDatabaseAdminClient();
-    databaseClient = spanner.getDatabaseClient(DatabaseId.of(projectId, instanceId, databaseId));
-
-    createTable(instanceId, databaseId, tableName);
-    createChangeStream(instanceId, databaseId, changeStreamName, tableName);
   }
 
   @AfterClass
   public static void afterClass()
       throws InterruptedException, ExecutionException, TimeoutException {
-    databaseAdminClient
-        .updateDatabaseDdl(
-            instanceId,
-            databaseId,
-            Arrays.asList("DROP TABLE " + tableName, "DROP CHANGE STREAM " + changeStreamName),
-            "op" + RandomUtils.randomAlphaNumeric(8))
-        .get(5, TimeUnit.MINUTES);
     spanner.close();
   }
 
   @Test
-  public void testReadSpannerChangeStream() throws InterruptedException {
+  public void testReadSpannerChangeStream() {
     final SpannerConfig spannerConfig =
         SpannerConfig.create()
             .withHost(StaticValueProvider.of(SPANNER_HOST))
             .withProjectId(projectId)
             .withInstanceId(instanceId)
             .withDatabaseId(databaseId);
-    final Timestamp now = Timestamp.now();
-    final Timestamp after30Seconds =
-        Timestamp.ofTimeSecondsAndNanos(now.getSeconds() + 30, now.getNanos());
+    final Timestamp startTime = Timestamp.now();
+    final Timestamp endTime = Timestamp.ofTimeSecondsAndNanos(startTime.getSeconds() + 60, startTime.getNanos());
 
     pipeline.getOptions().as(SpannerTestPipelineOptions.class).setStreaming(true);
     pipeline.getOptions().as(SpannerTestPipelineOptions.class).setBlockOnRun(false);
 
-    final PCollection<String> tokens =
-        pipeline
-            .apply(
-                SpannerIO.readChangeStream()
-                    .withSpannerConfig(spannerConfig)
-                    .withChangeStreamName(changeStreamName)
-                    .withInclusiveStartAt(now)
-                    .withInclusiveEndAt(after30Seconds))
-            .apply(
-                MapElements.into(TypeDescriptors.strings())
-                    .via(
-                        record -> {
-                          final Gson gson = new Gson();
-                          final Mod mod = record.getMods().get(0);
-                          final Map<String, String> keys =
-                              gson.fromJson(mod.getKeysJson(), Map.class);
-                          final Map<String, String> newValues =
-                              gson.fromJson(mod.getNewValuesJson(), Map.class);
-                          return String.join(
-                              ",",
-                              keys.get("SingerId"),
-                              newValues.get("FirstName"),
-                              newValues.get("LastName"));
+    pipeline
+        .apply(
+            SpannerIO.readChangeStream()
+                .withSpannerConfig(spannerConfig)
+                .withChangeStreamName(CHANGE_STREAM_NAME)
+                .withMetadataDatabase(METADATA_DATABASE)
+                .withInclusiveStartAt(startTime)
+                .withInclusiveEndAt(endTime))
+        .apply(
+            MapElements.into(TypeDescriptors.strings())
+                .via(
+                    record -> {
+                      final Gson gson = new Gson();
+                      final Mod mod = record.getMods().get(0);
+                      final Map<String, String> keys =
+                          gson.fromJson(mod.getKeysJson(), Map.class);
+                      final Map<String, String> newValues =
+                          gson.fromJson(mod.getNewValuesJson(), Map.class);
+                      return String.join(
+                          ",",
+                          keys.get("SingerId"),
+                          newValues.get("FirstName"),
+                          newValues.get("LastName"));
                         }));
 
-    PAssert.that(tokens).containsInAnyOrder("1,First Name 1,Last Name 1");
-
-    final PipelineResult pipelineResult = pipeline.run();
-    Thread.sleep(5_000);
-    insertRecords();
-    pipelineResult.waitUntilFinish();
-  }
-
-  private static Timestamp insertRecords() {
-    return databaseClient.write(
-        Collections.singletonList(
-            Mutation.newInsertBuilder(tableName)
-                .set("SingerId")
-                .to(1L)
-                .set("FirstName")
-                .to("First Name 1")
-                .set("LastName")
-                .to("Last Name 1")
-                .build()));
-  }
-
-  private static String generateTableName() {
-    return TABLE_NAME_PREFIX
-        + "_"
-        + RandomUtils.randomAlphaNumeric(MAX_TABLE_NAME_LENGTH - 1 - TABLE_NAME_PREFIX.length());
-  }
-
-  // TODO: Check if stream name supports dashes
-  private static String generateChangeStreamName() {
-    return TABLE_NAME_PREFIX
-        + "Stream"
-        + RandomUtils.randomAlphaNumeric(
-            MAX_CHANGE_STREAM_NAME_LENGTH - 1 - (TABLE_NAME_PREFIX + "Stream").length());
-  }
-
-  private static void createTable(String instanceId, String databaseId, String tableName)
-      throws InterruptedException, ExecutionException, TimeoutException {
-    databaseAdminClient
-        .updateDatabaseDdl(
-            instanceId,
-            databaseId,
-            Collections.singletonList(
-                "CREATE TABLE "
-                    + tableName
-                    + " ("
-                    + "   SingerId   INT64 NOT NULL,"
-                    + "   FirstName  STRING(1024),"
-                    + "   LastName   STRING(1024),"
-                    + "   SingerInfo BYTES(MAX)"
-                    + " ) PRIMARY KEY (SingerId)"),
-            "op" + RandomUtils.randomAlphaNumeric(8))
-        .get(5, TimeUnit.MINUTES);
-  }
-
-  private static void createChangeStream(
-      String instanceId, String databaseId, String changeStreamName, String tableName)
-      throws InterruptedException, ExecutionException, TimeoutException {
-    databaseAdminClient
-        .updateDatabaseDdl(
-            instanceId,
-            databaseId,
-            Collections.singletonList(
-                "CREATE CHANGE STREAM " + changeStreamName + " FOR " + tableName),
-            "op" + RandomUtils.randomAlphaNumeric(8))
-        .get(5, TimeUnit.MINUTES);
+    pipeline.run().waitUntilFinish();
   }
 }

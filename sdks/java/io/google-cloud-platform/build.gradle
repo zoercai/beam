@@ -154,8 +154,8 @@ dependencies {
  */
 task integrationTest(type: Test, dependsOn: processTestResources) {
   group = "Verification"
-  def gcpProject = project.findProperty('gcpProject') ?: 'apache-beam-testing'
-  def gcpSpannerInstance = project.findProperty('gcpSpannerInstance') ?: 'beam-test-instance'
+  def gcpProject = project.findProperty('gcpProject') ?: 'cloud-spanner-backups-loadtest'
+  def gcpSpannerInstance = project.findProperty('gcpSpannerInstance') ?: 'change-stream-load-test-3'
   def gcpTempRoot = project.findProperty('gcpTempRoot') ?: 'gs://temp-storage-for-end-to-end-tests'
   systemProperty "beamTestPipelineOptions", JsonOutput.toJson([
           "--runner=DirectRunner",
