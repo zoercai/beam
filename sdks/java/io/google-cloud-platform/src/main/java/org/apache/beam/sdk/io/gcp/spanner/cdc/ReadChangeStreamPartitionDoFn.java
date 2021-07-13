@@ -60,12 +60,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   private final DaoFactory daoFactory;
   private final MapperFactory mapperFactory;
   private final ActionFactory actionFactory;
-  private transient ChangeStreamRecordMapper changeStreamRecordMapper;
-  private transient ChangeStreamDao changeStreamDao;
-
-  private transient DataChangeRecordAction dataChangeRecordAction;
-  private transient HeartbeatRecordAction heartbeatRecordAction;
-  private transient ChildPartitionsRecordAction childPartitionsRecordAction;
 
   private transient QueryChangeStreamAction queryChangeStreamAction;
   private transient WaitForChildPartitionsAction waitForChildPartitionsAction;
@@ -115,12 +109,12 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   @Setup
   public void setup() {
     final PartitionMetadataDao partitionMetadataDao = daoFactory.getPartitionMetadataDao();
-    this.changeStreamDao = daoFactory.getChangeStreamDao();
-    this.changeStreamRecordMapper = mapperFactory.changeStreamRecordMapper();
+    ChangeStreamDao changeStreamDao = daoFactory.getChangeStreamDao();
+    ChangeStreamRecordMapper changeStreamRecordMapper = mapperFactory.changeStreamRecordMapper();
 
-    this.dataChangeRecordAction = actionFactory.dataChangeRecordAction();
-    this.heartbeatRecordAction = actionFactory.heartbeatRecordAction();
-    this.childPartitionsRecordAction =
+    DataChangeRecordAction dataChangeRecordAction = actionFactory.dataChangeRecordAction();
+    HeartbeatRecordAction heartbeatRecordAction = actionFactory.heartbeatRecordAction();
+    ChildPartitionsRecordAction childPartitionsRecordAction =
         actionFactory.childPartitionsRecordAction(partitionMetadataDao);
 
     this.queryChangeStreamAction =

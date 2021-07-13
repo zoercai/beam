@@ -73,7 +73,6 @@ public class QueryChangeStreamActionTest {
   private DataChangeRecordAction dataChangeRecordAction;
   private HeartbeatRecordAction heartbeatRecordAction;
   private ChildPartitionsRecordAction childPartitionsRecordAction;
-  private QueryChangeStreamAction queryChangeStreamAction;
   private WaitForChildPartitionsAction waitForChildPartitionsAction;
   private FinishPartitionAction finishPartitionAction;
   private WaitForParentPartitionsAction waitForParentPartitionsAction;
@@ -92,19 +91,19 @@ public class QueryChangeStreamActionTest {
     dataChangeRecordAction = mock(DataChangeRecordAction.class);
     heartbeatRecordAction = mock(HeartbeatRecordAction.class);
     childPartitionsRecordAction = mock(ChildPartitionsRecordAction.class);
-    queryChangeStreamAction =
-        new QueryChangeStreamAction(
-            changeStreamDao,
-            changeStreamRecordMapper,
-            dataChangeRecordAction,
-            heartbeatRecordAction,
-            childPartitionsRecordAction);
     waitForChildPartitionsAction = mock(WaitForChildPartitionsAction.class);
     finishPartitionAction = mock(FinishPartitionAction.class);
     waitForParentPartitionsAction = mock(WaitForParentPartitionsAction.class);
     deletePartitionAction = mock(DeletePartitionAction.class);
     donePartitionAction = mock(DonePartitionAction.class);
 
+    QueryChangeStreamAction queryChangeStreamAction =
+        new QueryChangeStreamAction(
+            changeStreamDao,
+            changeStreamRecordMapper,
+            dataChangeRecordAction,
+            heartbeatRecordAction,
+            childPartitionsRecordAction);
     doFn = new ReadChangeStreamPartitionDoFn(daoFactory, mapperFactory, actionFactory);
 
     partition =

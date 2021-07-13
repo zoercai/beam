@@ -70,13 +70,11 @@ public class ReadChangeStreamPartitionDoFnTest {
   private static final boolean PARTITION_IS_INCLUSIVE_END = false;
   private static final long PARTITION_HEARTBEAT_MILLIS = 30_000L;
 
-  private ChangeStreamDao changeStreamDao;
   private ReadChangeStreamPartitionDoFn doFn;
   private PartitionMetadata partition;
   private PartitionRestriction restriction;
   private RestrictionTracker<PartitionRestriction, PartitionPosition> restrictionTracker;
   private OutputReceiver<DataChangeRecord> outputReceiver;
-  private ChangeStreamRecordMapper changeStreamRecordMapper;
   private ManualWatermarkEstimator<Instant> watermarkEstimator;
   private DataChangeRecordAction dataChangeRecordAction;
   private HeartbeatRecordAction heartbeatRecordAction;
@@ -95,8 +93,8 @@ public class ReadChangeStreamPartitionDoFnTest {
     final MapperFactory mapperFactory = mock(MapperFactory.class);
     final ActionFactory actionFactory = mock(ActionFactory.class);
     final PartitionMetadataDao partitionMetadataDao = mock(PartitionMetadataDao.class);
-    changeStreamDao = mock(ChangeStreamDao.class);
-    changeStreamRecordMapper = mock(ChangeStreamRecordMapper.class);
+    ChangeStreamDao changeStreamDao = mock(ChangeStreamDao.class);
+    ChangeStreamRecordMapper changeStreamRecordMapper = mock(ChangeStreamRecordMapper.class);
     dataChangeRecordAction = mock(DataChangeRecordAction.class);
     heartbeatRecordAction = mock(HeartbeatRecordAction.class);
     childPartitionsRecordAction = mock(ChildPartitionsRecordAction.class);
