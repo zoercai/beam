@@ -106,6 +106,7 @@ public class QueryChangeStreamAction {
           }
         }
       }
+      LOG.info("[" + token + "] = Query change stream action completed successfully");
       return Optional.empty();
     }
   }
