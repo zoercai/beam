@@ -87,7 +87,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   @GetInitialWatermarkEstimatorState
   public Instant getInitialWatermarkEstimatorState(
       @Element PartitionMetadata partition, @Timestamp Instant currentElementTimestamp) {
-    LOG.info("[" + partition.getPartitionToken() + "] Get initial watermark estimator");
+    LOG.debug("[" + partition.getPartitionToken() + "] Get initial watermark estimator");
     return currentElementTimestamp;
   }
 
@@ -95,13 +95,13 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   public ManualWatermarkEstimator<Instant> newWatermarkEstimator(
       @Element PartitionMetadata partition,
       @WatermarkEstimatorState Instant watermarkEstimatorState) {
-    LOG.info("[" + partition.getPartitionToken() + "] New watermark estimator");
+    LOG.debug("[" + partition.getPartitionToken() + "] New watermark estimator");
     return new Manual(watermarkEstimatorState);
   }
 
   @GetInitialRestriction
   public PartitionRestriction initialRestriction(@Element PartitionMetadata partition) {
-    LOG.info("[" + partition.getPartitionToken() + "] Initial restriction");
+    LOG.debug("[" + partition.getPartitionToken() + "] Initial restriction");
     return PartitionRestriction.queryChangeStream(
         partition.getStartTimestamp(), partition.getEndTimestamp());
   }
@@ -109,7 +109,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
   @NewTracker
   public PartitionRestrictionTracker newTracker(
       @Element PartitionMetadata partition, @Restriction PartitionRestriction restriction) {
-    LOG.info("[" + partition.getPartitionToken() + "] New tracker");
+    LOG.debug("[" + partition.getPartitionToken() + "] New tracker");
     return new PartitionRestrictionTracker(restriction);
   }
 
@@ -142,7 +142,8 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
       OutputReceiver<DataChangeRecord> receiver,
       ManualWatermarkEstimator<Instant> watermarkEstimator) {
     final String token = partition.getPartitionToken();
-    LOG.info("[" + token + "] Processing element with restriction " + tracker.currentRestriction());
+    LOG.debug(
+        "[" + token + "] Processing element with restriction " + tracker.currentRestriction());
 
     final PartitionMode mode = tracker.currentRestriction().getMode();
     switch (mode) {
@@ -244,7 +245,7 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
             throw new IllegalArgumentException("Unknown record type " + record.getClass());
           }
           if (maybeContinuation.isPresent()) {
-            LOG.info("[" + token + "] Continuation present, returning " + maybeContinuation);
+            LOG.debug("[" + token + "] Continuation present, returning " + maybeContinuation);
             return maybeContinuation.get();
           }
         }
