@@ -20,22 +20,17 @@ package org.apache.beam.sdk.io.gcp.spanner;
 import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.Spanner;
 import com.google.cloud.spanner.SpannerOptions;
-import com.google.gson.Gson;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import org.apache.beam.sdk.extensions.gcp.options.GcpOptions;
 import org.apache.beam.sdk.io.common.IOITHelper;
 import org.apache.beam.sdk.io.common.IOTestPipelineOptions;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.model.Mod;
 import org.apache.beam.sdk.options.Default;
 import org.apache.beam.sdk.options.Description;
 import org.apache.beam.sdk.options.StreamingOptions;
 import org.apache.beam.sdk.options.Validation;
 import org.apache.beam.sdk.options.ValueProvider.StaticValueProvider;
 import org.apache.beam.sdk.testing.TestPipeline;
-import org.apache.beam.sdk.transforms.MapElements;
-import org.apache.beam.sdk.values.TypeDescriptors;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -54,6 +49,7 @@ public class SpannerChangeStreamIT {
 
   /** Pipeline options for this test. */
   public interface SpannerTestPipelineOptions extends IOTestPipelineOptions, StreamingOptions {
+
     @Description("Project that hosts Spanner instance")
     @Nullable
     String getProjectId();
@@ -120,35 +116,19 @@ public class SpannerChangeStreamIT {
             .withInstanceId(instanceId)
             .withDatabaseId(databaseId);
     final Timestamp startTime = Timestamp.now();
-    final Timestamp endTime = Timestamp.ofTimeSecondsAndNanos(startTime.getSeconds() + 60, startTime.getNanos());
+    final Timestamp endTime =
+        Timestamp.ofTimeSecondsAndNanos(startTime.getSeconds() + 60, startTime.getNanos());
 
     pipeline.getOptions().as(SpannerTestPipelineOptions.class).setStreaming(true);
     pipeline.getOptions().as(SpannerTestPipelineOptions.class).setBlockOnRun(false);
 
-    pipeline
-        .apply(
-            SpannerIO.readChangeStream()
-                .withSpannerConfig(spannerConfig)
-                .withChangeStreamName(CHANGE_STREAM_NAME)
-                .withMetadataDatabase(METADATA_DATABASE)
-                .withInclusiveStartAt(startTime)
-                .withInclusiveEndAt(endTime))
-        .apply(
-            MapElements.into(TypeDescriptors.strings())
-                .via(
-                    record -> {
-                      final Gson gson = new Gson();
-                      final Mod mod = record.getMods().get(0);
-                      final Map<String, String> keys =
-                          gson.fromJson(mod.getKeysJson(), Map.class);
-                      final Map<String, String> newValues =
-                          gson.fromJson(mod.getNewValuesJson(), Map.class);
-                      return String.join(
-                          ",",
-                          keys.get("SingerId"),
-                          newValues.get("FirstName"),
-                          newValues.get("LastName"));
-                        }));
+    pipeline.apply(
+        SpannerIO.readChangeStream()
+            .withSpannerConfig(spannerConfig)
+            .withChangeStreamName(CHANGE_STREAM_NAME)
+            .withMetadataDatabase(METADATA_DATABASE)
+            .withInclusiveStartAt(startTime)
+            .withInclusiveEndAt(endTime));
 
     pipeline.run().waitUntilFinish();
   }
