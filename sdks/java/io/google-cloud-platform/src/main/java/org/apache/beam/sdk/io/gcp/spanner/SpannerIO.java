@@ -1404,6 +1404,10 @@ public class SpannerIO {
       checkArgument(
           getInclusiveStartAt() != null,
           "SpannerIO.readChangeStream() requires the start time to be set.");
+      if (getMetadataInstance() != null) {
+        checkArgument(getMetadataDatabase() != null,
+            "SpannerIO.readChangeStream() requires the metadata database to be set if metadata instance is set.");
+      }
 
       // Start time must be before end time
       if (getInclusiveEndAt() != null
