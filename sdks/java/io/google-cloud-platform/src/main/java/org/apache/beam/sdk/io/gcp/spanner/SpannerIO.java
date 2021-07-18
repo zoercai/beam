@@ -1416,8 +1416,9 @@ public class SpannerIO {
               getSpannerConfig().getProjectId().get(),
               getSpannerConfig().getInstanceId().get(),
               getSpannerConfig().getDatabaseId().get());
-      final String partitionMetadataInstanceId = MoreObjects
-          .firstNonNull(getMetadataInstance(), changeStreamDatabaseId.getInstanceId().getInstance());
+      final String partitionMetadataInstanceId =
+          MoreObjects.firstNonNull(
+              getMetadataInstance(), changeStreamDatabaseId.getInstanceId().getInstance());
       final String partitionMetadataDatabaseId =
           MoreObjects.firstNonNull(getMetadataDatabase(), changeStreamDatabaseId.getDatabase());
       final String partitionMetadataTableName =
