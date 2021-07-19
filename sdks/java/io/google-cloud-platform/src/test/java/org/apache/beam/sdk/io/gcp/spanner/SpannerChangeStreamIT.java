@@ -127,6 +127,7 @@ public class SpannerChangeStreamIT {
             .withSpannerConfig(spannerConfig)
             .withChangeStreamName(CHANGE_STREAM_NAME)
             .withMetadataDatabase(METADATA_DATABASE)
+            .withMetadataDatabase(databaseId)
             .withInclusiveStartAt(startTime)
             .withInclusiveEndAt(endTime));
 
