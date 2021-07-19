@@ -23,14 +23,21 @@ import static org.apache.beam.sdk.io.gcp.spanner.cdc.CdcMetrics.RECORD_COMMIT_TI
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.CdcMetrics.RECORD_READ_TO_EMITTED_MS;
 
 import java.io.Serializable;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangeRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangeRecord.Metadata;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 
-public class PostProcessingMetricsDoFn extends DoFn<DataChangeRecord, DataChangeRecord>
+public class PostProcessingDoFn extends DoFn<DataChangeRecord, DataChangeRecord>
     implements Serializable {
+
+  private final PartitionMetadataAdminDao partitionMetadataAdminDao;
+
+  public PostProcessingDoFn(PartitionMetadataAdminDao partitionMetadataAdminDao) {
+    this.partitionMetadataAdminDao = partitionMetadataAdminDao;
+  }
 
   @ProcessElement
   public void processElement(
@@ -47,5 +54,10 @@ public class PostProcessingMetricsDoFn extends DoFn<DataChangeRecord, DataChange
     DATA_RECORD_COUNTER.inc();
 
     receiver.outputWithTimestamp(dataChangeRecord, commitInstant);
+  }
+
+  @Teardown
+  public void tearDown() {
+    partitionMetadataAdminDao.deletePartitionMetadataTable();
   }
 }

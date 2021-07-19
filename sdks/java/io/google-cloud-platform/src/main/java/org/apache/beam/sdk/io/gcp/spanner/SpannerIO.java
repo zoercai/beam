@@ -54,7 +54,7 @@ import org.apache.beam.sdk.coders.SerializableCoder;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.ChangeStreamSourceDescriptor;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.DetectNewPartitionsDoFn;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.PipelineInitializer;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.PostProcessingMetricsDoFn;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.PostProcessingDoFn;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.ReadChangeStreamPartitionDoFn;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ActionFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.DaoFactory;
@@ -1433,7 +1433,8 @@ public class SpannerIO {
           new DetectNewPartitionsDoFn(daoFactory);
       final ReadChangeStreamPartitionDoFn readChangeStreamPartitionDoFn =
           new ReadChangeStreamPartitionDoFn(daoFactory, new MapperFactory(), new ActionFactory());
-      final PostProcessingMetricsDoFn postProcessingMetricsDoFn = new PostProcessingMetricsDoFn();
+      final PostProcessingDoFn postProcessingDoFn =
+          new PostProcessingDoFn(daoFactory.getPartitionMetadataAdminDao());
 
       PipelineInitializer.initialize(
           daoFactory.getPartitionMetadataAdminDao(),
@@ -1448,9 +1449,7 @@ public class SpannerIO {
           .apply("Generate change stream sources", Create.of(sources))
           .apply("Detect new partitions", ParDo.of(detectNewPartitionsDoFn))
           .apply("Read change stream partition", ParDo.of(readChangeStreamPartitionDoFn))
-          .apply("Post processing metrics", ParDo.of(postProcessingMetricsDoFn));
-
-      // TODO: We need to perform cleanup after everything has terminated (delete metadata table)
+          .apply("Post processing", ParDo.of(postProcessingDoFn));
     }
   }
 
