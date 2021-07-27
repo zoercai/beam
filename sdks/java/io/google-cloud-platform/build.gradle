@@ -145,6 +145,9 @@ dependencies {
   testCompile library.java.powermock
   testCompile library.java.powermock_mockito
   testCompile library.java.joda_time
+  testCompile 'io.opencensus:opencensus-api:0.28.3'
+  testCompile 'io.opencensus:opencensus-exporter-trace-stackdriver:0.28.3'
+  testRuntimeOnly 'io.opencensus:opencensus-impl:0.28.3'
   testRuntimeOnly library.java.slf4j_jdk14
 }
 

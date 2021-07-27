@@ -20,6 +20,9 @@ package org.apache.beam.sdk.io.gcp.spanner;
 import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.Spanner;
 import com.google.cloud.spanner.SpannerOptions;
+import io.opencensus.exporter.trace.stackdriver.StackdriverTraceConfiguration;
+import io.opencensus.exporter.trace.stackdriver.StackdriverTraceExporter;
+import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import org.apache.beam.sdk.extensions.gcp.options.GcpOptions;
@@ -85,7 +88,9 @@ public class SpannerChangeStreamIT {
   private static Spanner spanner;
 
   @BeforeClass
-  public static void setup() throws InterruptedException, ExecutionException, TimeoutException {
+  public static void setup()
+      throws InterruptedException, ExecutionException, TimeoutException, IOException {
+
     options = IOITHelper.readIOTestPipelineOptions(SpannerTestPipelineOptions.class);
     projectId =
         options.getProjectId() == null
@@ -99,6 +104,9 @@ public class SpannerChangeStreamIT {
             .setProjectId(projectId)
             .build()
             .getService();
+
+    StackdriverTraceExporter.createAndRegister(
+        StackdriverTraceConfiguration.builder().setProjectId(projectId).build());
   }
 
   @AfterClass
