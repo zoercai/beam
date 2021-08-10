@@ -41,11 +41,11 @@ import com.google.cloud.spanner.Statement;
 import com.google.cloud.spanner.Struct;
 import com.google.cloud.spanner.TimestampBound;
 import io.opencensus.common.Scope;
+import io.opencensus.trace.Sampler;
 import io.opencensus.trace.Tracer;
 import io.opencensus.trace.Tracing;
 import io.opencensus.trace.config.TraceConfig;
 import io.opencensus.trace.config.TraceParams;
-import io.opencensus.trace.samplers.Samplers;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -1302,7 +1302,7 @@ public class SpannerIO {
 
     abstract @Nullable RpcPriority getRpcPriority();
 
-    abstract @Nullable Boolean getSampleAllTrace();
+    abstract @Nullable Sampler getTraceSampler();
 
     abstract Builder toBuilder();
 
@@ -1325,7 +1325,7 @@ public class SpannerIO {
 
       abstract Builder setRpcPriority(RpcPriority rpcPriority);
 
-      abstract Builder setSampleAllTrace(Boolean sampleAllTrace);
+      abstract Builder setTraceSampler(Sampler traceSampler);
 
       abstract ReadChangeStream build();
     }
@@ -1405,8 +1405,8 @@ public class SpannerIO {
       return toBuilder().setRpcPriority(rpcPriority).build();
     }
 
-    public ReadChangeStream withSampleAllTrace(Boolean sampleAllTrace) {
-      return toBuilder().setSampleAllTrace(sampleAllTrace).build();
+    public ReadChangeStream withTraceSampler(Sampler traceSampler) {
+      return toBuilder().setTraceSampler(traceSampler).build();
     }
 
     @Override
@@ -1454,10 +1454,10 @@ public class SpannerIO {
       final String partitionMetadataTableName =
           generatePartitionMetadataTableName(partitionMetadataDatabaseId);
 
-      if (getSampleAllTrace() != null && getSampleAllTrace()) {
+      if (getTraceSampler() != null) {
         TraceConfig globalTraceConfig = Tracing.getTraceConfig();
         globalTraceConfig.updateActiveTraceParams(
-            TraceParams.DEFAULT.toBuilder().setSampler(Samplers.alwaysSample()).build());
+            TraceParams.DEFAULT.toBuilder().setSampler(getTraceSampler()).build());
       }
       Tracer tracer = Tracing.getTracer();
       try (Scope scope =

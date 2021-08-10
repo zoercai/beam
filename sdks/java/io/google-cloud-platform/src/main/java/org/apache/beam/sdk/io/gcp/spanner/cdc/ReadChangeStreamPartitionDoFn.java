@@ -25,7 +25,6 @@ import io.opencensus.common.Scope;
 import io.opencensus.trace.AttributeValue;
 import io.opencensus.trace.Tracer;
 import io.opencensus.trace.Tracing;
-import io.opencensus.trace.samplers.Samplers;
 import java.io.Serializable;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ActionFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ChildPartitionsRecordAction;
@@ -212,7 +211,6 @@ public class ReadChangeStreamPartitionDoFn extends DoFn<PartitionMetadata, DataC
     try (Scope scope =
         TRACER
             .spanBuilder("ReadChangeStreamPartitionDoFn.processElement")
-            .setSampler(Samplers.alwaysSample())
             .setRecordEvents(true)
             .startScopedSpan()) {
       TRACER
