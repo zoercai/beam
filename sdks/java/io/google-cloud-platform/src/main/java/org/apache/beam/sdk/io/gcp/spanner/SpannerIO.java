@@ -1484,7 +1484,8 @@ public class SpannerIO {
                 partitionMetadataSpannerConfig,
                 partitionMetadataTableName,
                 mapperFactory,
-                rpcPriority);
+                rpcPriority,
+                input.getPipeline().getOptions().getJobName());
         final ActionFactory actionFactory = new ActionFactory();
 
         final DetectNewPartitionsDoFn detectNewPartitionsDoFn =
