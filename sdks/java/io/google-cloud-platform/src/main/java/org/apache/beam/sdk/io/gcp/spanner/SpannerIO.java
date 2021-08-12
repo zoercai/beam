@@ -1505,10 +1505,15 @@ public class SpannerIO {
         PCollection<byte[]> impulseOut = input.apply(Impulse.create());
         PCollection<DataChangeRecord> results =
             impulseOut
-                .apply("Generate change stream sources",
+                .apply(
+                    "Generate change stream sources",
                     MapElements.into(TypeDescriptor.of(ChangeStreamSourceDescriptor.class))
-                        .via(ignored -> ChangeStreamSourceDescriptor.of(
-                            getChangeStreamName(), getInclusiveStartAt(), getInclusiveEndAt())))
+                        .via(
+                            ignored ->
+                                ChangeStreamSourceDescriptor.of(
+                                    getChangeStreamName(),
+                                    getInclusiveStartAt(),
+                                    getInclusiveEndAt())))
                 .apply("Detect new partitions", ParDo.of(detectNewPartitionsDoFn))
                 .apply("Read change stream partition", ParDo.of(readChangeStreamPartitionDoFn))
                 .apply("Post processing metrics", ParDo.of(postProcessingMetricsDoFn));
