@@ -1501,18 +1501,18 @@ public class SpannerIO {
             daoFactory.getPartitionMetadataDao(),
             getInclusiveStartAt(),
             getInclusiveEndAt());
-        final List<ChangeStreamSourceDescriptor> sources = new ArrayList<>();
-        sources.add(
-            ChangeStreamSourceDescriptor.of(
-                getChangeStreamName(), getInclusiveStartAt(), getInclusiveEndAt()));
+
+        PCollection<byte[]> impulseOut = input.apply(Impulse.create());
         PCollection<DataChangeRecord> results =
-            input
-                .apply("Generate change stream sources", Create.of(sources))
+            impulseOut
+                .apply("Generate change stream sources",
+                    MapElements.into(TypeDescriptor.of(ChangeStreamSourceDescriptor.class))
+                        .via(ignored -> ChangeStreamSourceDescriptor.of(
+                            getChangeStreamName(), getInclusiveStartAt(), getInclusiveEndAt())))
                 .apply("Detect new partitions", ParDo.of(detectNewPartitionsDoFn))
                 .apply("Read change stream partition", ParDo.of(readChangeStreamPartitionDoFn))
                 .apply("Post processing metrics", ParDo.of(postProcessingMetricsDoFn));
-        input
-            .apply(Impulse.create())
+        impulseOut
             .apply(Wait.on(results))
             .apply(ParDo.of(new CleanUpReadChangeStreamDoFn(daoFactory)));
         return results;
