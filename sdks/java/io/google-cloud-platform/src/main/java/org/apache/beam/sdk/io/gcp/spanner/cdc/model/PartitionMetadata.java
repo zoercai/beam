@@ -68,6 +68,9 @@ public class PartitionMetadata implements Serializable {
   private long heartbeatMillis;
   // The current state of the partition in the Connector.
   private State state;
+  // The current watermark (timestamp) being processed
+  @AvroEncode(using = TimestampEncoding.class)
+  private Timestamp currentWatermark;
   // When the row was inserted.
   @AvroEncode(using = TimestampEncoding.class)
   private Timestamp createdAt;
@@ -93,6 +96,7 @@ public class PartitionMetadata implements Serializable {
       boolean inclusiveEnd,
       long heartbeatMillis,
       State state,
+      Timestamp currentWatermark,
       Timestamp createdAt,
       Timestamp scheduledAt,
       Timestamp runningAt,
@@ -105,6 +109,7 @@ public class PartitionMetadata implements Serializable {
     this.inclusiveEnd = inclusiveEnd;
     this.heartbeatMillis = heartbeatMillis;
     this.state = state;
+    this.currentWatermark = currentWatermark;
     this.createdAt = createdAt;
     this.scheduledAt = scheduledAt;
     this.runningAt = runningAt;
@@ -141,6 +146,10 @@ public class PartitionMetadata implements Serializable {
 
   public State getState() {
     return state;
+  }
+
+  public Timestamp getCurrentWatermark() {
+    return currentWatermark;
   }
 
   public Timestamp getCreatedAt() {
@@ -180,6 +189,7 @@ public class PartitionMetadata implements Serializable {
         && Objects.equals(startTimestamp, that.startTimestamp)
         && Objects.equals(endTimestamp, that.endTimestamp)
         && state == that.state
+        && Objects.equals(currentWatermark, that.currentWatermark)
         && Objects.equals(createdAt, that.createdAt)
         && Objects.equals(scheduledAt, that.scheduledAt)
         && Objects.equals(runningAt, that.runningAt)
@@ -197,6 +207,7 @@ public class PartitionMetadata implements Serializable {
         inclusiveEnd,
         heartbeatMillis,
         state,
+        currentWatermark,
         createdAt,
         scheduledAt,
         runningAt,
@@ -223,6 +234,8 @@ public class PartitionMetadata implements Serializable {
         + heartbeatMillis
         + ", state="
         + state
+        + ", currentWatermark="
+        + currentWatermark
         + ", createdAt="
         + createdAt
         + ", scheduledAt="
@@ -248,6 +261,7 @@ public class PartitionMetadata implements Serializable {
     private Boolean inclusiveEnd;
     private Long heartbeatMillis;
     private State state;
+    private Timestamp currentWatermark;
     private Timestamp createdAt;
     private Timestamp scheduledAt;
     private Timestamp runningAt;
@@ -264,6 +278,7 @@ public class PartitionMetadata implements Serializable {
       this.inclusiveEnd = partition.inclusiveEnd;
       this.heartbeatMillis = partition.heartbeatMillis;
       this.state = partition.state;
+      this.currentWatermark = partition.currentWatermark;
       this.createdAt = partition.createdAt;
       this.scheduledAt = partition.scheduledAt;
       this.runningAt = partition.runningAt;
@@ -310,6 +325,11 @@ public class PartitionMetadata implements Serializable {
       return this;
     }
 
+    public Builder setCurrentWatermark(Timestamp currentWatermark) {
+      this.currentWatermark = currentWatermark;
+      return this;
+    }
+
     public Builder setCreatedAt(Timestamp createdAt) {
       this.createdAt = createdAt;
       return this;
@@ -336,6 +356,7 @@ public class PartitionMetadata implements Serializable {
       Preconditions.checkState(startTimestamp != null, "startTimestamp");
       Preconditions.checkState(heartbeatMillis != null, "heartbeatMillis");
       Preconditions.checkState(state != null, "state");
+      Preconditions.checkState(currentWatermark != null, "currentWatermark");
       // TODO: Add test for default inclusive start
       if (inclusiveStart == null) {
         inclusiveStart = true;
@@ -357,6 +378,7 @@ public class PartitionMetadata implements Serializable {
           inclusiveEnd,
           heartbeatMillis,
           state,
+          currentWatermark,
           createdAt,
           scheduledAt,
           runningAt,

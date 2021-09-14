@@ -153,7 +153,7 @@ public class PartitionMetadataDao {
                       + metadataTableName
                       + " WHERE State = @state"
                       + " ORDER BY "
-                      + PartitionMetadataAdminDao.COLUMN_START_TIMESTAMP
+                      + PartitionMetadataAdminDao.COLUMN_CURRENT_WATERMARK
                       + " ASC")
               .bind("state")
               .to(state.toString())
@@ -215,7 +215,7 @@ public class PartitionMetadataDao {
     runInTransaction(
         transaction -> {
           final long recordsProcessed = transaction.getRecordsProcessed(partitionToken);
-          transaction.updateRecordsProcessed(recordsProcessed + recordsIncrement, partitionToken);
+          transaction.updateRecordsProcessed(partitionToken, recordsProcessed + recordsIncrement);
           return null;
         });
   }
@@ -300,6 +300,21 @@ public class PartitionMetadataDao {
       }
     }
 
+    public Void updateToCreated(String partitionToken) {
+      try (Scope scope =
+          TRACER.spanBuilder("updateToCreated").setRecordEvents(true).startScopedSpan()) {
+        TRACER
+            .getCurrentSpan()
+            .putAttribute(
+                PARTITION_ID_ATTRIBUTE_LABEL, AttributeValue.stringAttributeValue(partitionToken));
+        transaction.buffer(
+            ImmutableList.of(
+                createUpdateMetadataStateMutationFrom(partitionToken, State.CREATED),
+                createUpdateMetricStateMutationFrom(partitionToken, State.CREATED)));
+        return null;
+      }
+    }
+
     public Void updateToRunning(String partitionToken) {
       try (Scope scope =
           TRACER.spanBuilder("updateToRunning").setRecordEvents(true).startScopedSpan()) {
@@ -328,7 +343,7 @@ public class PartitionMetadataDao {
       transaction.buffer(mutation);
     }
 
-    public void updateRecordsProcessed(long recordsProcessed, String partitionToken) {
+    public void updateRecordsProcessed(String partitionToken, long recordsProcessed) {
       Mutation mutation =
           Mutation.newUpdateBuilder(metricsTableName)
               .set(PartitionMetricsAdminDao.COLUMN_PARTITION_TOKEN)
@@ -506,6 +521,12 @@ public class PartitionMetadataDao {
               .set(PartitionMetricsAdminDao.COLUMN_LAST_UPDATED_AT)
               .to(Value.COMMIT_TIMESTAMP);
       switch (state) {
+        case CREATED:
+          mutationBuilder =
+              mutationBuilder
+                  .set(PartitionMetricsAdminDao.COLUMN_CREATED_AT)
+                  .to(Value.COMMIT_TIMESTAMP);
+          break;
         case SCHEDULED:
           mutationBuilder =
               mutationBuilder
@@ -524,7 +545,6 @@ public class PartitionMetadataDao {
                   .set(PartitionMetricsAdminDao.COLUMN_FINISHED_AT)
                   .to(Value.COMMIT_TIMESTAMP);
           break;
-        case CREATED:
         default:
           throw new IllegalArgumentException(
               String.format("State %s should not be set in a metadata update.", state));

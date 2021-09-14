@@ -26,14 +26,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.cloud.Timestamp;
+import com.google.cloud.spanner.ErrorCode;
+import com.google.cloud.spanner.SpannerExceptionFactory;
 import com.google.cloud.spanner.Struct;
 import java.util.Arrays;
 import java.util.Optional;
-import org.apache.beam.sdk.io.gcp.spanner.cdc.TimestampConverter;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamResultSet;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamResultSetMetadata;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao.InTransactionContext;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.ChangeStreamRecordMapper;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangeRecord;
@@ -43,7 +45,7 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionPosition;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestriction;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionRestrictionMetadata;
-import org.apache.beam.sdk.transforms.DoFn.BundleFinalizer;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.util.TestTransactionAnswer;
 import org.apache.beam.sdk.transforms.DoFn.OutputReceiver;
 import org.apache.beam.sdk.transforms.DoFn.ProcessContinuation;
 import org.apache.beam.sdk.transforms.splittabledofn.ManualWatermarkEstimator;
@@ -54,16 +56,20 @@ import org.junit.Before;
 import org.junit.Test;
 
 public class QueryChangeStreamActionTest {
+
   private static final String PARTITION_TOKEN = "partitionToken";
   private static final Timestamp PARTITION_START_TIMESTAMP =
       Timestamp.ofTimeSecondsAndNanos(10, 20);
   private static final boolean PARTITION_IS_INCLUSIVE_START = true;
   private static final Timestamp PARTITION_END_TIMESTAMP = Timestamp.ofTimeSecondsAndNanos(30, 40);
+  private static final Instant PARTITION_END_INSTANT =
+      new Instant(PARTITION_END_TIMESTAMP.toSqlTimestamp().getTime());
   private static final boolean PARTITION_IS_INCLUSIVE_END = false;
   private static final long PARTITION_HEARTBEAT_MILLIS = 30_000L;
-  private static final Instant CURRENT_WATERMARK = Instant.now();
-  private static final Timestamp CURRENT_WATERMARK_TIMESTAMP =
-      TimestampConverter.timestampFromMillis(CURRENT_WATERMARK.getMillis());
+  private static final Timestamp RESTRICTION_START_TIMESTAMP = Timestamp.ofTimeMicroseconds(100L);
+  private static final Timestamp RESTRICTION_END_TIMESTAMP = Timestamp.ofTimeMicroseconds(200L);
+  private static final Instant RESTRICTION_END_INSTANT =
+      new Instant(RESTRICTION_END_TIMESTAMP.toSqlTimestamp().getTime());
 
   private ChangeStreamDao changeStreamDao;
   private PartitionMetadataDao partitionMetadataDao;
@@ -74,7 +80,6 @@ public class QueryChangeStreamActionTest {
   private OutputReceiver<DataChangeRecord> outputReceiver;
   private ChangeStreamRecordMapper changeStreamRecordMapper;
   private ManualWatermarkEstimator<Instant> watermarkEstimator;
-  private BundleFinalizer bundleFinalizer;
   private DataChangeRecordAction dataChangeRecordAction;
   private HeartbeatRecordAction heartbeatRecordAction;
   private ChildPartitionsRecordAction childPartitionsRecordAction;
@@ -108,6 +113,7 @@ public class QueryChangeStreamActionTest {
             .setInclusiveEnd(PARTITION_IS_INCLUSIVE_END)
             .setHeartbeatMillis(PARTITION_HEARTBEAT_MILLIS)
             .setState(SCHEDULED)
+            .setCurrentWatermark(PARTITION_START_TIMESTAMP)
             .setScheduledAt(Timestamp.now())
             .build();
     restriction = mock(PartitionRestriction.class);
@@ -115,7 +121,6 @@ public class QueryChangeStreamActionTest {
     restrictionTracker = mock(RestrictionTracker.class);
     outputReceiver = mock(OutputReceiver.class);
     watermarkEstimator = mock(ManualWatermarkEstimator.class);
-    bundleFinalizer = new BundleFinalizerStub();
 
     when(restriction.getMetadata()).thenReturn(restrictionMetadata);
     when(restrictionTracker.currentRestriction()).thenReturn(restriction);
@@ -130,16 +135,19 @@ public class QueryChangeStreamActionTest {
     final ChangeStreamResultSet resultSet = mock(ChangeStreamResultSet.class);
     final DataChangeRecord record1 = mock(DataChangeRecord.class);
     final DataChangeRecord record2 = mock(DataChangeRecord.class);
+    final InTransactionContext transaction = mock(InTransactionContext.class);
     when(restriction.getMode()).thenReturn(PartitionMode.QUERY_CHANGE_STREAM);
+    when(restriction.getStartTimestamp()).thenReturn(RESTRICTION_START_TIMESTAMP);
+    when(restriction.getEndTimestamp()).thenReturn(RESTRICTION_END_TIMESTAMP);
     when(changeStreamDao.changeStreamQuery(
             PARTITION_TOKEN,
-            PARTITION_START_TIMESTAMP,
+            RESTRICTION_START_TIMESTAMP,
             PARTITION_IS_INCLUSIVE_START,
-            PARTITION_END_TIMESTAMP,
+            RESTRICTION_END_TIMESTAMP,
             PARTITION_IS_INCLUSIVE_END,
             PARTITION_HEARTBEAT_MILLIS))
         .thenReturn(resultSet);
-    when(resultSet.next()).thenReturn(true);
+    when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(rowAsStruct);
     when(resultSet.getMetadata()).thenReturn(resultSetMetadata);
     when(changeStreamRecordMapper.toChangeStreamRecords(
@@ -150,20 +158,21 @@ public class QueryChangeStreamActionTest {
         .thenReturn(Optional.empty());
     when(dataChangeRecordAction.run(
             partition, record2, restrictionTracker, outputReceiver, watermarkEstimator))
-        .thenReturn(Optional.of(ProcessContinuation.stop()));
-    when(watermarkEstimator.currentWatermark()).thenReturn(CURRENT_WATERMARK);
+        .thenReturn(Optional.empty());
+    when(partitionMetadataDao.runInTransaction(any()))
+        .thenAnswer(new TestTransactionAnswer(transaction));
 
     final Optional<ProcessContinuation> result =
-        action.run(
-            partition, restrictionTracker, outputReceiver, watermarkEstimator, bundleFinalizer);
+        action.run(partition, restrictionTracker, outputReceiver, watermarkEstimator);
 
     assertEquals(Optional.of(ProcessContinuation.stop()), result);
     verify(dataChangeRecordAction)
         .run(partition, record1, restrictionTracker, outputReceiver, watermarkEstimator);
     verify(dataChangeRecordAction)
         .run(partition, record2, restrictionTracker, outputReceiver, watermarkEstimator);
-    verify(partitionMetadataDao)
-        .updateCurrentWatermark(PARTITION_TOKEN, CURRENT_WATERMARK_TIMESTAMP);
+    verify(watermarkEstimator).setWatermark(RESTRICTION_END_INSTANT);
+    verify(transaction).updateCurrentWatermark(PARTITION_TOKEN, RESTRICTION_END_TIMESTAMP);
+    verify(transaction).updateToCreated(PARTITION_TOKEN);
 
     verify(heartbeatRecordAction, never()).run(any(), any(), any(), any());
     verify(childPartitionsRecordAction, never()).run(any(), any(), any(), any());
@@ -178,16 +187,19 @@ public class QueryChangeStreamActionTest {
     final ChangeStreamResultSet resultSet = mock(ChangeStreamResultSet.class);
     final HeartbeatRecord record1 = mock(HeartbeatRecord.class);
     final HeartbeatRecord record2 = mock(HeartbeatRecord.class);
+    final InTransactionContext transaction = mock(InTransactionContext.class);
     when(restriction.getMode()).thenReturn(PartitionMode.QUERY_CHANGE_STREAM);
+    when(restriction.getStartTimestamp()).thenReturn(RESTRICTION_START_TIMESTAMP);
+    when(restriction.getEndTimestamp()).thenReturn(RESTRICTION_END_TIMESTAMP);
     when(changeStreamDao.changeStreamQuery(
             PARTITION_TOKEN,
-            PARTITION_START_TIMESTAMP,
+            RESTRICTION_START_TIMESTAMP,
             PARTITION_IS_INCLUSIVE_START,
-            PARTITION_END_TIMESTAMP,
+            RESTRICTION_END_TIMESTAMP,
             PARTITION_IS_INCLUSIVE_END,
             PARTITION_HEARTBEAT_MILLIS))
         .thenReturn(resultSet);
-    when(resultSet.next()).thenReturn(true);
+    when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(rowAsStruct);
     when(resultSet.getMetadata()).thenReturn(resultSetMetadata);
     when(changeStreamRecordMapper.toChangeStreamRecords(
@@ -196,18 +208,19 @@ public class QueryChangeStreamActionTest {
     when(heartbeatRecordAction.run(partition, record1, restrictionTracker, watermarkEstimator))
         .thenReturn(Optional.empty());
     when(heartbeatRecordAction.run(partition, record2, restrictionTracker, watermarkEstimator))
-        .thenReturn(Optional.of(ProcessContinuation.stop()));
-    when(watermarkEstimator.currentWatermark()).thenReturn(CURRENT_WATERMARK);
+        .thenReturn(Optional.empty());
+    when(partitionMetadataDao.runInTransaction(any()))
+        .thenAnswer(new TestTransactionAnswer(transaction));
 
     final Optional<ProcessContinuation> result =
-        action.run(
-            partition, restrictionTracker, outputReceiver, watermarkEstimator, bundleFinalizer);
+        action.run(partition, restrictionTracker, outputReceiver, watermarkEstimator);
 
     assertEquals(Optional.of(ProcessContinuation.stop()), result);
     verify(heartbeatRecordAction).run(partition, record1, restrictionTracker, watermarkEstimator);
     verify(heartbeatRecordAction).run(partition, record2, restrictionTracker, watermarkEstimator);
-    verify(partitionMetadataDao)
-        .updateCurrentWatermark(PARTITION_TOKEN, CURRENT_WATERMARK_TIMESTAMP);
+    verify(watermarkEstimator).setWatermark(RESTRICTION_END_INSTANT);
+    verify(transaction).updateCurrentWatermark(PARTITION_TOKEN, RESTRICTION_END_TIMESTAMP);
+    verify(transaction).updateToCreated(PARTITION_TOKEN);
 
     verify(dataChangeRecordAction, never()).run(any(), any(), any(), any(), any());
     verify(childPartitionsRecordAction, never()).run(any(), any(), any(), any());
@@ -222,16 +235,19 @@ public class QueryChangeStreamActionTest {
     final ChangeStreamResultSet resultSet = mock(ChangeStreamResultSet.class);
     final ChildPartitionsRecord record1 = mock(ChildPartitionsRecord.class);
     final ChildPartitionsRecord record2 = mock(ChildPartitionsRecord.class);
+    final InTransactionContext transaction = mock(InTransactionContext.class);
     when(restriction.getMode()).thenReturn(PartitionMode.QUERY_CHANGE_STREAM);
+    when(restriction.getStartTimestamp()).thenReturn(RESTRICTION_START_TIMESTAMP);
+    when(restriction.getEndTimestamp()).thenReturn(RESTRICTION_END_TIMESTAMP);
     when(changeStreamDao.changeStreamQuery(
             PARTITION_TOKEN,
-            PARTITION_START_TIMESTAMP,
+            RESTRICTION_START_TIMESTAMP,
             PARTITION_IS_INCLUSIVE_START,
-            PARTITION_END_TIMESTAMP,
+            RESTRICTION_END_TIMESTAMP,
             PARTITION_IS_INCLUSIVE_END,
             PARTITION_HEARTBEAT_MILLIS))
         .thenReturn(resultSet);
-    when(resultSet.next()).thenReturn(true);
+    when(resultSet.next()).thenReturn(true, false);
     when(resultSet.getCurrentRowAsStruct()).thenReturn(rowAsStruct);
     when(resultSet.getMetadata()).thenReturn(resultSetMetadata);
     when(changeStreamRecordMapper.toChangeStreamRecords(
@@ -242,20 +258,21 @@ public class QueryChangeStreamActionTest {
         .thenReturn(Optional.empty());
     when(childPartitionsRecordAction.run(
             partition, record2, restrictionTracker, watermarkEstimator))
-        .thenReturn(Optional.of(ProcessContinuation.stop()));
-    when(watermarkEstimator.currentWatermark()).thenReturn(CURRENT_WATERMARK);
+        .thenReturn(Optional.empty());
+    when(partitionMetadataDao.runInTransaction(any()))
+        .thenAnswer(new TestTransactionAnswer(transaction));
 
     final Optional<ProcessContinuation> result =
-        action.run(
-            partition, restrictionTracker, outputReceiver, watermarkEstimator, bundleFinalizer);
+        action.run(partition, restrictionTracker, outputReceiver, watermarkEstimator);
 
     assertEquals(Optional.of(ProcessContinuation.stop()), result);
     verify(childPartitionsRecordAction)
         .run(partition, record1, restrictionTracker, watermarkEstimator);
     verify(childPartitionsRecordAction)
         .run(partition, record2, restrictionTracker, watermarkEstimator);
-    verify(partitionMetadataDao)
-        .updateCurrentWatermark(PARTITION_TOKEN, CURRENT_WATERMARK_TIMESTAMP);
+    verify(watermarkEstimator).setWatermark(RESTRICTION_END_INSTANT);
+    verify(transaction).updateCurrentWatermark(PARTITION_TOKEN, RESTRICTION_END_TIMESTAMP);
+    verify(transaction).updateToCreated(PARTITION_TOKEN);
 
     verify(dataChangeRecordAction, never()).run(any(), any(), any(), any(), any());
     verify(heartbeatRecordAction, never()).run(any(), any(), any(), any());
@@ -265,39 +282,100 @@ public class QueryChangeStreamActionTest {
   @Test
   public void testQueryChangeStreamModeWithStreamFinished() {
     final ChangeStreamResultSet changeStreamResultSet = mock(ChangeStreamResultSet.class);
+    final InTransactionContext transaction = mock(InTransactionContext.class);
     when(restriction.getMode()).thenReturn(PartitionMode.QUERY_CHANGE_STREAM);
+    when(restriction.getStartTimestamp()).thenReturn(RESTRICTION_START_TIMESTAMP);
+    when(restriction.getEndTimestamp()).thenReturn(PARTITION_END_TIMESTAMP);
     when(changeStreamDao.changeStreamQuery(
             PARTITION_TOKEN,
-            PARTITION_START_TIMESTAMP,
+            RESTRICTION_START_TIMESTAMP,
             PARTITION_IS_INCLUSIVE_START,
             PARTITION_END_TIMESTAMP,
             PARTITION_IS_INCLUSIVE_END,
             PARTITION_HEARTBEAT_MILLIS))
         .thenReturn(changeStreamResultSet);
     when(changeStreamResultSet.next()).thenReturn(false);
-    when(watermarkEstimator.currentWatermark()).thenReturn(CURRENT_WATERMARK);
+    when(partitionMetadataDao.runInTransaction(any()))
+        .thenAnswer(new TestTransactionAnswer(transaction));
 
     final Optional<ProcessContinuation> result =
-        action.run(
-            partition, restrictionTracker, outputReceiver, watermarkEstimator, bundleFinalizer);
+        action.run(partition, restrictionTracker, outputReceiver, watermarkEstimator);
 
     assertEquals(Optional.empty(), result);
-    verify(partitionMetadataDao)
-        .updateCurrentWatermark(PARTITION_TOKEN, CURRENT_WATERMARK_TIMESTAMP);
+    verify(watermarkEstimator).setWatermark(PARTITION_END_INSTANT);
+    verify(transaction).updateCurrentWatermark(PARTITION_TOKEN, PARTITION_END_TIMESTAMP);
 
     verify(dataChangeRecordAction, never()).run(any(), any(), any(), any(), any());
     verify(heartbeatRecordAction, never()).run(any(), any(), any(), any());
     verify(childPartitionsRecordAction, never()).run(any(), any(), any(), any());
   }
 
-  private static class BundleFinalizerStub implements BundleFinalizer {
-    @Override
-    public void afterBundleCommit(Instant callbackExpiry, Callback callback) {
-      try {
-        callback.onBundleSuccess();
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
+  @Test
+  public void testQueryChangeStreamModeWithOutOfRangeError() {
+    final ChangeStreamResultSet changeStreamResultSet = mock(ChangeStreamResultSet.class);
+    final InTransactionContext transaction = mock(InTransactionContext.class);
+    when(restriction.getMode()).thenReturn(PartitionMode.QUERY_CHANGE_STREAM);
+    when(restriction.getStartTimestamp()).thenReturn(RESTRICTION_START_TIMESTAMP);
+    when(restriction.getEndTimestamp()).thenReturn(PARTITION_END_TIMESTAMP);
+    when(changeStreamDao.changeStreamQuery(
+            PARTITION_TOKEN,
+            RESTRICTION_START_TIMESTAMP,
+            PARTITION_IS_INCLUSIVE_START,
+            PARTITION_END_TIMESTAMP,
+            PARTITION_IS_INCLUSIVE_END,
+            PARTITION_HEARTBEAT_MILLIS))
+        .thenReturn(changeStreamResultSet);
+    when(changeStreamResultSet.next())
+        .thenThrow(
+            SpannerExceptionFactory.newSpannerException(
+                ErrorCode.OUT_OF_RANGE, "Specified start_timestamp is invalid for the partition"));
+    when(partitionMetadataDao.runInTransaction(any()))
+        .thenAnswer(new TestTransactionAnswer(transaction));
+
+    final Optional<ProcessContinuation> result =
+        action.run(partition, restrictionTracker, outputReceiver, watermarkEstimator);
+
+    assertEquals(Optional.empty(), result);
+    verify(watermarkEstimator).setWatermark(PARTITION_END_INSTANT);
+    verify(transaction).updateCurrentWatermark(PARTITION_TOKEN, PARTITION_END_TIMESTAMP);
+
+    verify(dataChangeRecordAction, never()).run(any(), any(), any(), any(), any());
+    verify(heartbeatRecordAction, never()).run(any(), any(), any(), any());
+    verify(childPartitionsRecordAction, never()).run(any(), any(), any(), any());
+  }
+
+  @Test
+  public void testQueryChangeStreamModeWithInvalidArgumentError() {
+    final ChangeStreamResultSet changeStreamResultSet = mock(ChangeStreamResultSet.class);
+    final InTransactionContext transaction = mock(InTransactionContext.class);
+    when(restriction.getMode()).thenReturn(PartitionMode.QUERY_CHANGE_STREAM);
+    when(restriction.getStartTimestamp()).thenReturn(RESTRICTION_START_TIMESTAMP);
+    when(restriction.getEndTimestamp()).thenReturn(PARTITION_END_TIMESTAMP);
+    when(changeStreamDao.changeStreamQuery(
+            PARTITION_TOKEN,
+            RESTRICTION_START_TIMESTAMP,
+            PARTITION_IS_INCLUSIVE_START,
+            PARTITION_END_TIMESTAMP,
+            PARTITION_IS_INCLUSIVE_END,
+            PARTITION_HEARTBEAT_MILLIS))
+        .thenReturn(changeStreamResultSet);
+    when(changeStreamResultSet.next())
+        .thenThrow(
+            SpannerExceptionFactory.newSpannerException(
+                ErrorCode.INVALID_ARGUMENT,
+                "Specified start_timestamp is invalid for a partition_token"));
+    when(partitionMetadataDao.runInTransaction(any()))
+        .thenAnswer(new TestTransactionAnswer(transaction));
+
+    final Optional<ProcessContinuation> result =
+        action.run(partition, restrictionTracker, outputReceiver, watermarkEstimator);
+
+    assertEquals(Optional.empty(), result);
+    verify(watermarkEstimator).setWatermark(PARTITION_END_INSTANT);
+    verify(transaction).updateCurrentWatermark(PARTITION_TOKEN, PARTITION_END_TIMESTAMP);
+
+    verify(dataChangeRecordAction, never()).run(any(), any(), any(), any(), any());
+    verify(heartbeatRecordAction, never()).run(any(), any(), any(), any());
+    verify(childPartitionsRecordAction, never()).run(any(), any(), any(), any());
   }
 }

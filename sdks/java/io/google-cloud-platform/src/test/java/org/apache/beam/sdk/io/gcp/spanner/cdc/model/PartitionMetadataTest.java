@@ -34,10 +34,11 @@ public class PartitionMetadataTest {
   private static final String PARENT_TOKEN = "parentToken123";
   private static final Timestamp START_TIMESTAMP = Timestamp.ofTimeSecondsAndNanos(1, 1);
   private static final Timestamp END_TIMESTAMP = Timestamp.ofTimeSecondsAndNanos(2, 2);
-  private static final Timestamp CREATED_AT = Timestamp.ofTimeSecondsAndNanos(3, 3);
-  private static final Timestamp SCHEDULED_AT = Timestamp.ofTimeSecondsAndNanos(4, 4);
-  private static final Timestamp RUNNING_AT = Timestamp.ofTimeSecondsAndNanos(5, 5);
-  private static final Timestamp FINISHED_AT = Timestamp.ofTimeSecondsAndNanos(6, 6);
+  private static final Timestamp CURRENT_WATERMARK = Timestamp.ofTimeSecondsAndNanos(3, 3);
+  private static final Timestamp CREATED_AT = Timestamp.ofTimeSecondsAndNanos(4, 4);
+  private static final Timestamp SCHEDULED_AT = Timestamp.ofTimeSecondsAndNanos(5, 5);
+  private static final Timestamp RUNNING_AT = Timestamp.ofTimeSecondsAndNanos(6, 6);
+  private static final Timestamp FINISHED_AT = Timestamp.ofTimeSecondsAndNanos(7, 7);
 
   @Test
   public void testBuilderDefaultsToInclusiveStartAndExclusiveEnd() {
@@ -51,6 +52,7 @@ public class PartitionMetadataTest {
             false,
             10,
             State.FINISHED,
+            CURRENT_WATERMARK,
             CREATED_AT,
             SCHEDULED_AT,
             RUNNING_AT,
@@ -63,6 +65,7 @@ public class PartitionMetadataTest {
             .setEndTimestamp(END_TIMESTAMP)
             .setHeartbeatMillis(10)
             .setState(State.FINISHED)
+            .setCurrentWatermark(CURRENT_WATERMARK)
             .setCreatedAt(CREATED_AT)
             .setScheduledAt(SCHEDULED_AT)
             .setRunningAt(RUNNING_AT)
@@ -83,6 +86,7 @@ public class PartitionMetadataTest {
                 .setEndTimestamp(END_TIMESTAMP)
                 .setHeartbeatMillis(10)
                 .setState(State.CREATED)
+                .setCurrentWatermark(CURRENT_WATERMARK)
                 .setCreatedAt(CREATED_AT)
                 .build());
   }
@@ -99,6 +103,7 @@ public class PartitionMetadataTest {
                 .setEndTimestamp(END_TIMESTAMP)
                 .setHeartbeatMillis(10)
                 .setState(State.CREATED)
+                .setCurrentWatermark(CURRENT_WATERMARK)
                 .setCreatedAt(CREATED_AT)
                 .build());
   }
@@ -115,6 +120,7 @@ public class PartitionMetadataTest {
                 .setEndTimestamp(END_TIMESTAMP)
                 .setHeartbeatMillis(10)
                 .setState(State.CREATED)
+                .setCurrentWatermark(CURRENT_WATERMARK)
                 .setCreatedAt(CREATED_AT)
                 .build());
   }
@@ -131,6 +137,7 @@ public class PartitionMetadataTest {
                 .setStartTimestamp(START_TIMESTAMP)
                 .setEndTimestamp(END_TIMESTAMP)
                 .setState(State.CREATED)
+                .setCurrentWatermark(CURRENT_WATERMARK)
                 .setCreatedAt(CREATED_AT)
                 .build());
   }
@@ -147,6 +154,24 @@ public class PartitionMetadataTest {
                 .setStartTimestamp(START_TIMESTAMP)
                 .setEndTimestamp(END_TIMESTAMP)
                 .setHeartbeatMillis(10)
+                .setCreatedAt(CREATED_AT)
+                .setCurrentWatermark(CURRENT_WATERMARK)
+                .build());
+  }
+
+  @Test
+  public void testBuilderThrowsExceptionWhenCurrentWatermarkIsMissing() {
+    assertThrows(
+        "currentWatermark",
+        IllegalStateException.class,
+        () ->
+            PartitionMetadata.newBuilder()
+                .setPartitionToken(PARTITION_TOKEN)
+                .setParentTokens(Sets.newHashSet(PARENT_TOKEN))
+                .setStartTimestamp(START_TIMESTAMP)
+                .setEndTimestamp(END_TIMESTAMP)
+                .setHeartbeatMillis(10)
+                .setState(State.CREATED)
                 .setCreatedAt(CREATED_AT)
                 .build());
   }

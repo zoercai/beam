@@ -17,8 +17,6 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.QUERY_CHANGE_STREAM;
-
 import java.util.Optional;
 import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker;
 import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker.HasProgress;
@@ -36,18 +34,15 @@ public class PartitionRestrictionTracker
   private static final Logger LOG = LoggerFactory.getLogger(PartitionRestrictionTracker.class);
   private final PartitionRestrictionSplitter splitter;
   private final PartitionRestrictionClaimer claimer;
-  private final PartitionRestrictionSplitChecker splitChecker;
   private final PartitionRestrictionProgressChecker progressChecker;
   private PartitionRestriction restriction;
   private PartitionPosition lastClaimedPosition;
-  private boolean isSplitAllowed;
 
   public PartitionRestrictionTracker(PartitionRestriction restriction) {
     this(
         restriction,
         new PartitionRestrictionSplitter(),
         new PartitionRestrictionClaimer(),
-        new PartitionRestrictionSplitChecker(),
         new PartitionRestrictionProgressChecker());
   }
 
@@ -55,13 +50,10 @@ public class PartitionRestrictionTracker
       PartitionRestriction restriction,
       PartitionRestrictionSplitter splitter,
       PartitionRestrictionClaimer claimer,
-      PartitionRestrictionSplitChecker splitChecker,
       PartitionRestrictionProgressChecker progressChecker) {
     this.splitter = splitter;
     this.claimer = claimer;
-    this.splitChecker = splitChecker;
     this.restriction = restriction;
-    this.isSplitAllowed = restriction.getMode() != QUERY_CHANGE_STREAM;
     this.progressChecker = progressChecker;
   }
 
@@ -72,13 +64,11 @@ public class PartitionRestrictionTracker
             .map(PartitionRestrictionMetadata::getPartitionToken)
             .orElse(null);
     final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(fractionOfRemainder, isSplitAllowed, lastClaimedPosition, restriction);
+        splitter.trySplit(fractionOfRemainder, lastClaimedPosition, restriction);
     LOG.debug(
         "["
             + token
             + "] Try split "
-            + isSplitAllowed
-            + ", "
             + lastClaimedPosition
             + ", "
             + restriction
@@ -95,7 +85,6 @@ public class PartitionRestrictionTracker
     final boolean canClaim = claimer.tryClaim(restriction, lastClaimedPosition, position);
 
     if (canClaim) {
-      this.isSplitAllowed = splitChecker.isSplitAllowed(restriction, position);
       this.lastClaimedPosition = position;
     }
 
@@ -120,11 +109,6 @@ public class PartitionRestrictionTracker
   @Override
   public IsBounded isBounded() {
     return IsBounded.UNBOUNDED;
-  }
-
-  @VisibleForTesting
-  boolean isSplitAllowed() {
-    return isSplitAllowed;
   }
 
   @VisibleForTesting

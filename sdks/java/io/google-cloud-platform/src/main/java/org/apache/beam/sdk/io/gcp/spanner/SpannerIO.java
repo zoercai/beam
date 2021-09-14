@@ -1315,6 +1315,8 @@ public class SpannerIO {
 
     abstract @Nullable Timestamp getInclusiveEndAt();
 
+    abstract @Nullable Duration getQueryInterval();
+
     abstract @Nullable Deserializer getDeserializer();
 
     abstract @Nullable RpcPriority getRpcPriority();
@@ -1333,6 +1335,8 @@ public class SpannerIO {
       abstract Builder setMetadataInstance(String metadataInstance);
 
       abstract Builder setMetadataDatabase(String metadataDatabase);
+
+      abstract Builder setQueryInterval(Duration duration);
 
       abstract Builder setInclusiveStartAt(Timestamp inclusiveStartAt);
 
@@ -1408,6 +1412,10 @@ public class SpannerIO {
     /** Specifies the end time of the change stream. */
     public ReadChangeStream withInclusiveEndAt(Timestamp timestamp) {
       return toBuilder().setInclusiveEndAt(timestamp).build();
+    }
+
+    public ReadChangeStream withQueryInterval(Duration queryInterval) {
+      return toBuilder().setQueryInterval(queryInterval).build();
     }
 
     /**
@@ -1494,7 +1502,9 @@ public class SpannerIO {
                 .withCommitDeadline(changeStreamSpannerConfig.getCommitDeadline())
                 .withEmulatorHost(changeStreamSpannerConfig.getEmulatorHost())
                 .withMaxCumulativeBackoff(changeStreamSpannerConfig.getMaxCumulativeBackoff());
-        final MapperFactory mapperFactory = new MapperFactory();
+        final Duration queryInterval =
+            MoreObjects.firstNonNull(getQueryInterval(), Duration.standardSeconds(30));
+        final MapperFactory mapperFactory = new MapperFactory(queryInterval);
         final ChangeStreamMetrics metrics = new ChangeStreamMetrics();
         final RpcPriority rpcPriority = MoreObjects.firstNonNull(getRpcPriority(), RpcPriority.LOW);
         final DaoFactory daoFactory =

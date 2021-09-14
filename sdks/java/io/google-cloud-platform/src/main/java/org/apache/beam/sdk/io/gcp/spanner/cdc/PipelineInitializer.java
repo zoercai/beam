@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc;
 
 import com.google.cloud.Timestamp;
+import java.math.BigDecimal;
 import javax.annotation.Nullable;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
@@ -44,6 +45,12 @@ public class PipelineInitializer {
       PartitionMetadataDao partitionMetadataDao,
       Timestamp inclusiveStartAt,
       @Nullable Timestamp inclusiveEndAt) {
+    // TODO: Convert to nanos when the backend supports it
+    final Timestamp currentWatermark =
+        Timestamp.ofTimeMicroseconds(
+            TimestampConverter.timestampToMicros(inclusiveStartAt)
+                .subtract(BigDecimal.ONE)
+                .longValue());
     PartitionMetadata parentPartition =
         PartitionMetadata.newBuilder()
             .setPartitionToken(InitialPartition.PARTITION_TOKEN)
@@ -54,6 +61,7 @@ public class PipelineInitializer {
             .setInclusiveEnd(true)
             .setHeartbeatMillis(DEFAULT_HEARTBEAT_MILLIS)
             .setState(State.CREATED)
+            .setCurrentWatermark(currentWatermark)
             .build();
     partitionMetadataDao.insert(parentPartition);
   }

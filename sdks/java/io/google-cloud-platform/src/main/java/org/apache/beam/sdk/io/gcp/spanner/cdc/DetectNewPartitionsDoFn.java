@@ -167,7 +167,13 @@ public class DetectNewPartitionsDoFn extends DoFn<ChangeStreamSourceDescriptor, 
 
   private PartitionMetadata updateToScheduled(PartitionMetadata partition) {
     final String token = partition.getPartitionToken();
-    LOG.info("Scheduling partition " + partition.getPartitionToken());
+    LOG.info(
+        "Scheduling partition "
+            + partition.getPartitionToken()
+            + " for "
+            + partition.getCurrentWatermark()
+            + " to "
+            + partition.getEndTimestamp());
     final com.google.cloud.Timestamp createdAt = partition.getCreatedAt();
     final com.google.cloud.Timestamp scheduledAt = partitionMetadataDao.updateToScheduled(token);
 

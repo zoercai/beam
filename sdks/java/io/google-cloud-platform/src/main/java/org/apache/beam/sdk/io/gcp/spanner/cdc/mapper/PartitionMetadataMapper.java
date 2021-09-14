@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.mapper;
 
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao.COLUMN_CREATED_AT;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao.COLUMN_CURRENT_WATERMARK;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao.COLUMN_END_TIMESTAMP;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao.COLUMN_FINISHED_AT;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao.COLUMN_HEARTBEAT_MILLIS;
@@ -50,6 +51,7 @@ public class PartitionMetadataMapper {
         .setInclusiveEnd(resultSet.getBoolean(COLUMN_INCLUSIVE_END))
         .setHeartbeatMillis(resultSet.getLong(COLUMN_HEARTBEAT_MILLIS))
         .setState(State.valueOf(resultSet.getString(COLUMN_STATE)))
+        .setCurrentWatermark(resultSet.getTimestamp(COLUMN_CURRENT_WATERMARK))
         .setCreatedAt(resultSet.getTimestamp(COLUMN_CREATED_AT))
         .setScheduledAt(
             !resultSet.isNull(COLUMN_SCHEDULED_AT)
