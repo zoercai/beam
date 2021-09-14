@@ -17,12 +17,10 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.QUERY_CHANGE_STREAM;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 import com.google.cloud.Timestamp;
-import java.util.Optional;
 import org.apache.beam.sdk.transforms.splittabledofn.SplitResult;
 import org.junit.Before;
 import org.junit.Test;
@@ -48,71 +46,21 @@ public class PartitionRestrictionSplitterTest {
   }
 
   @Test
-  public void testSplitNotAllowed() {
-    final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0D, false, null, restriction);
-
-    assertNull(splitResult);
-  }
-
-  @Test
   public void testLastClaimedPositionIsNull() {
-    final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0D, true, null, restriction);
+    final SplitResult<PartitionRestriction> splitResult = splitter.trySplit(0D, null, restriction);
 
     assertNull(splitResult);
   }
 
   @Test
-  public void testQueryChangeStreamWithZeroFractionOfRemainder() {
+  public void testQueryChangeStream() {
     final PartitionPosition position =
-        PartitionPosition.queryChangeStream(Timestamp.ofTimeMicroseconds(50_000_250L));
+        PartitionPosition.queryChangeStream(Timestamp.ofTimeMicroseconds(1L));
 
     final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0D, true, position, restriction);
-
-    assertEquals(
-        SplitResult.of(
-            PartitionRestriction.queryChangeStream(
-                startTimestamp, Timestamp.ofTimeMicroseconds(50_000_251L)),
-            PartitionRestriction.queryChangeStream(
-                Timestamp.ofTimeMicroseconds(50_000_252L), endTimestamp)),
-        splitResult);
-  }
-
-  @Test
-  public void testQueryChangeStreamWithNonZeroFractionOfRemainder() {
-    final PartitionPosition position =
-        PartitionPosition.queryChangeStream(Timestamp.ofTimeMicroseconds(50_000_250L));
-
-    final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0.5D, true, position, restriction);
-
-    assertEquals(
-        SplitResult.of(
-            PartitionRestriction.queryChangeStream(
-                startTimestamp, Timestamp.ofTimeMicroseconds(75_000_125L)),
-            PartitionRestriction.queryChangeStream(
-                Timestamp.ofTimeMicroseconds(75_000_126L), endTimestamp)),
-        splitResult);
-  }
-
-  @Test
-  public void testQueryChangeStreamGreaterThanEndTimestamp() {
-    final PartitionPosition position =
-        PartitionPosition.queryChangeStream(Timestamp.ofTimeSecondsAndNanos(100L, 50));
-
-    final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0D, true, position, restriction);
+        splitter.trySplit(0D, position, restriction);
 
     assertNull(splitResult);
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void testQueryChangeStreamWithoutTimestamp() {
-    final PartitionPosition position = new PartitionPosition(Optional.empty(), QUERY_CHANGE_STREAM);
-
-    splitter.trySplit(0D, true, position, restriction);
   }
 
   @Test
@@ -120,7 +68,7 @@ public class PartitionRestrictionSplitterTest {
     final PartitionPosition position = PartitionPosition.waitForChildPartitions();
 
     final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0D, true, position, restriction);
+        splitter.trySplit(0D, position, restriction);
 
     assertEquals(
         SplitResult.of(
@@ -134,7 +82,7 @@ public class PartitionRestrictionSplitterTest {
     final PartitionPosition position = PartitionPosition.finishPartition();
 
     final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0D, true, position, restriction);
+        splitter.trySplit(0D, position, restriction);
 
     assertEquals(
         SplitResult.of(
@@ -148,7 +96,7 @@ public class PartitionRestrictionSplitterTest {
     final PartitionPosition position = PartitionPosition.waitForParentPartitions();
 
     final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0D, true, position, restriction);
+        splitter.trySplit(0D, position, restriction);
 
     assertEquals(
         SplitResult.of(
@@ -162,7 +110,7 @@ public class PartitionRestrictionSplitterTest {
     final PartitionPosition position = PartitionPosition.deletePartition();
 
     final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0D, true, position, restriction);
+        splitter.trySplit(0D, position, restriction);
 
     assertEquals(
         SplitResult.of(
@@ -176,7 +124,7 @@ public class PartitionRestrictionSplitterTest {
     final PartitionPosition position = PartitionPosition.done();
 
     final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0D, true, position, restriction);
+        splitter.trySplit(0D, position, restriction);
 
     assertNull(splitResult);
   }
@@ -186,7 +134,7 @@ public class PartitionRestrictionSplitterTest {
     final PartitionPosition position = PartitionPosition.stop();
 
     final SplitResult<PartitionRestriction> splitResult =
-        splitter.trySplit(0D, true, position, restriction);
+        splitter.trySplit(0D, position, restriction);
 
     assertNull(splitResult);
   }

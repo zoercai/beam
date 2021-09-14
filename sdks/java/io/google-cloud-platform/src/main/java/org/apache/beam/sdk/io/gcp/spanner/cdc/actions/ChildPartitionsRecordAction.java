@@ -28,9 +28,11 @@ import io.opencensus.common.Scope;
 import io.opencensus.trace.AttributeValue;
 import io.opencensus.trace.Tracer;
 import io.opencensus.trace.Tracing;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.Optional;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.ChangeStreamMetrics;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.TimestampConverter;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord.ChildPartition;
@@ -215,6 +217,12 @@ public class ChildPartitionsRecordAction {
       Timestamp endTimestamp,
       long heartbeatMillis,
       ChildPartition childPartition) {
+    // TODO: Convert to nanos when the backend supports it
+    final Timestamp currentWatermark =
+        Timestamp.ofTimeMicroseconds(
+            TimestampConverter.timestampToMicros(startTimestamp)
+                .subtract(BigDecimal.ONE)
+                .longValue());
     return PartitionMetadata.newBuilder()
         .setPartitionToken(childPartition.getToken())
         .setParentTokens(childPartition.getParentTokens())
@@ -224,6 +232,7 @@ public class ChildPartitionsRecordAction {
         .setInclusiveEnd(false)
         .setHeartbeatMillis(heartbeatMillis)
         .setState(CREATED)
+        .setCurrentWatermark(currentWatermark)
         .build();
   }
 }

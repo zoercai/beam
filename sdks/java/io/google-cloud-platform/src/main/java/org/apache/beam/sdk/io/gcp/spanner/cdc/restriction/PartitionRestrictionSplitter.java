@@ -17,13 +17,7 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.TimestampConverter.timestampFromMicros;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.TimestampConverter.timestampToMicros;
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.QUERY_CHANGE_STREAM;
-import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
-
 import com.google.cloud.Timestamp;
-import java.math.BigDecimal;
 import org.apache.beam.sdk.transforms.splittabledofn.SplitResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,32 +29,22 @@ public class PartitionRestrictionSplitter {
 
   public SplitResult<PartitionRestriction> trySplit(
       double fractionOfRemainder,
-      boolean isSplitAllowed,
       PartitionPosition lastClaimedPosition,
       PartitionRestriction restriction) {
-    // Move this check to the caller class
-    if (!isSplitAllowed) {
-      return null;
-    }
     if (lastClaimedPosition == null) {
       return null;
     }
 
-    final String partitionToken = restriction.getMetadata().getPartitionToken();
+    final String token = restriction.getMetadata().getPartitionToken();
     final PartitionMode positionMode = lastClaimedPosition.getMode();
-    checkArgument(
-        positionMode != QUERY_CHANGE_STREAM || lastClaimedPosition.getTimestamp().isPresent(),
-        "%s mode must specify a timestamp (no value sent)",
-        positionMode);
-
     final Timestamp startTimestamp = restriction.getStartTimestamp();
     final Timestamp endTimestamp = restriction.getEndTimestamp();
 
-    SplitResult<PartitionRestriction> splitResult = null;
+    SplitResult<PartitionRestriction> splitResult;
     switch (positionMode) {
       case QUERY_CHANGE_STREAM:
-        splitResult = splitQueryChangeStream(fractionOfRemainder, restriction, lastClaimedPosition);
-        break;
+        // Does not allow splitting in query change stream (checkpointing is done manually)
+        return null;
       case WAIT_FOR_CHILD_PARTITIONS:
         // If we need to split the wait for child partitions, we remain at the same mode. That is
         // because the primary restriction might resume and it might so happen that the residual
@@ -107,7 +91,7 @@ public class PartitionRestrictionSplitter {
 
     LOG.debug(
         "["
-            + partitionToken
+            + token
             + "] Split result for ("
             + fractionOfRemainder
             + ", "
@@ -117,46 +101,5 @@ public class PartitionRestrictionSplitter {
             + ") is "
             + splitResult);
     return splitResult;
-  }
-
-  private SplitResult<PartitionRestriction> splitQueryChangeStream(
-      double fractionOfRemainder,
-      PartitionRestriction restriction,
-      PartitionPosition lastClaimedPosition) {
-    final Timestamp startTimestamp = restriction.getStartTimestamp();
-    final Timestamp endTimestamp = restriction.getEndTimestamp();
-
-    // FIXME: The backend only supports micros precision for now. Change this to nanos whenever
-    // possible
-    final BigDecimal currentMicros = timestampToMicros(lastClaimedPosition.getTimestamp().get());
-    final BigDecimal endMicros = timestampToMicros(endTimestamp);
-    final BigDecimal splitPositionMicros =
-        currentMicros.add(
-            endMicros
-                .subtract(currentMicros)
-                .multiply(BigDecimal.valueOf(fractionOfRemainder))
-                .max(BigDecimal.ONE));
-
-    final Timestamp primaryEndTimestamp = timestampFromMicros(splitPositionMicros);
-    final Timestamp residualStartTimestamp =
-        timestampFromMicros(splitPositionMicros.add(BigDecimal.ONE));
-
-    if (residualStartTimestamp.compareTo(endTimestamp) > 0) {
-      return null;
-    } else {
-      return SplitResult.of(
-          PartitionRestriction.queryChangeStream(startTimestamp, primaryEndTimestamp)
-              .withMetadata(
-                  PartitionRestrictionMetadata.newBuilder(restriction.getMetadata())
-                      .withPartitionStartTimestamp(startTimestamp)
-                      .withPartitionEndTimestamp(primaryEndTimestamp)
-                      .build()),
-          PartitionRestriction.queryChangeStream(residualStartTimestamp, endTimestamp)
-              .withMetadata(
-                  PartitionRestrictionMetadata.newBuilder(restriction.getMetadata())
-                      .withPartitionStartTimestamp(residualStartTimestamp)
-                      .withPartitionEndTimestamp(endTimestamp)
-                      .build()));
-    }
   }
 }

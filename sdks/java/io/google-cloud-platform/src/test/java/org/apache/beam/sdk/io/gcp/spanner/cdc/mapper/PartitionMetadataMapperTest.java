@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.mapper;
 
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao.COLUMN_CREATED_AT;
+import static org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao.COLUMN_CURRENT_WATERMARK;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao.COLUMN_END_TIMESTAMP;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao.COLUMN_FINISHED_AT;
 import static org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataAdminDao.COLUMN_HEARTBEAT_MILLIS;
@@ -59,16 +60,19 @@ public class PartitionMetadataMapperTest {
     when(resultSet.getStringList(COLUMN_PARENT_TOKENS))
         .thenReturn(Collections.singletonList("parentToken"));
     when(resultSet.getTimestamp(COLUMN_START_TIMESTAMP))
-        .thenReturn(Timestamp.ofTimeMicroseconds(10));
+        .thenReturn(Timestamp.ofTimeMicroseconds(10L));
     when(resultSet.getBoolean(COLUMN_INCLUSIVE_START)).thenReturn(true);
-    when(resultSet.getTimestamp(COLUMN_END_TIMESTAMP)).thenReturn(Timestamp.ofTimeMicroseconds(20));
+    when(resultSet.getTimestamp(COLUMN_END_TIMESTAMP))
+        .thenReturn(Timestamp.ofTimeMicroseconds(20L));
     when(resultSet.getBoolean(COLUMN_INCLUSIVE_END)).thenReturn(true);
     when(resultSet.getLong(COLUMN_HEARTBEAT_MILLIS)).thenReturn(5_000L);
     when(resultSet.getString(COLUMN_STATE)).thenReturn("FINISHED");
-    when(resultSet.getTimestamp(COLUMN_CREATED_AT)).thenReturn(Timestamp.ofTimeMicroseconds(30));
-    when(resultSet.getTimestamp(COLUMN_SCHEDULED_AT)).thenReturn(Timestamp.ofTimeMicroseconds(40));
-    when(resultSet.getTimestamp(COLUMN_RUNNING_AT)).thenReturn(Timestamp.ofTimeMicroseconds(50));
-    when(resultSet.getTimestamp(COLUMN_FINISHED_AT)).thenReturn(Timestamp.ofTimeMicroseconds(60));
+    when(resultSet.getTimestamp(COLUMN_CURRENT_WATERMARK))
+        .thenReturn(Timestamp.ofTimeMicroseconds(30L));
+    when(resultSet.getTimestamp(COLUMN_CREATED_AT)).thenReturn(Timestamp.ofTimeMicroseconds(40L));
+    when(resultSet.getTimestamp(COLUMN_SCHEDULED_AT)).thenReturn(Timestamp.ofTimeMicroseconds(50L));
+    when(resultSet.getTimestamp(COLUMN_RUNNING_AT)).thenReturn(Timestamp.ofTimeMicroseconds(60L));
+    when(resultSet.getTimestamp(COLUMN_FINISHED_AT)).thenReturn(Timestamp.ofTimeMicroseconds(70L));
 
     final PartitionMetadata partition = mapper.from(resultSet);
 
@@ -82,10 +86,11 @@ public class PartitionMetadataMapperTest {
             true,
             5_000L,
             State.FINISHED,
-            Timestamp.ofTimeMicroseconds(30),
-            Timestamp.ofTimeMicroseconds(40),
-            Timestamp.ofTimeMicroseconds(50),
-            Timestamp.ofTimeMicroseconds(60)),
+            Timestamp.ofTimeMicroseconds(30L),
+            Timestamp.ofTimeMicroseconds(40L),
+            Timestamp.ofTimeMicroseconds(50L),
+            Timestamp.ofTimeMicroseconds(60L),
+            Timestamp.ofTimeMicroseconds(70L)),
         partition);
   }
 
@@ -95,11 +100,13 @@ public class PartitionMetadataMapperTest {
     when(resultSet.getStringList(COLUMN_PARENT_TOKENS))
         .thenReturn(Collections.singletonList("parentToken"));
     when(resultSet.getTimestamp(COLUMN_START_TIMESTAMP))
-        .thenReturn(Timestamp.ofTimeMicroseconds(10));
+        .thenReturn(Timestamp.ofTimeMicroseconds(10L));
     when(resultSet.getBoolean(COLUMN_INCLUSIVE_START)).thenReturn(true);
     when(resultSet.getLong(COLUMN_HEARTBEAT_MILLIS)).thenReturn(5_000L);
     when(resultSet.getString(COLUMN_STATE)).thenReturn("CREATED");
-    when(resultSet.getTimestamp(COLUMN_CREATED_AT)).thenReturn(Timestamp.ofTimeMicroseconds(30));
+    when(resultSet.getTimestamp(COLUMN_CURRENT_WATERMARK))
+        .thenReturn(Timestamp.ofTimeMicroseconds(30L));
+    when(resultSet.getTimestamp(COLUMN_CREATED_AT)).thenReturn(Timestamp.ofTimeMicroseconds(40L));
 
     final PartitionMetadata partition = mapper.from(resultSet);
 
@@ -113,7 +120,8 @@ public class PartitionMetadataMapperTest {
             false,
             5_000L,
             State.CREATED,
-            Timestamp.ofTimeMicroseconds(30),
+            Timestamp.ofTimeMicroseconds(30L),
+            Timestamp.ofTimeMicroseconds(40L),
             null,
             null,
             null),

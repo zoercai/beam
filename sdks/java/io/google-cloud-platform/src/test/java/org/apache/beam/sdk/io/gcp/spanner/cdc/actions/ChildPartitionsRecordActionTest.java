@@ -30,11 +30,13 @@ import static org.mockito.Mockito.when;
 import com.google.cloud.Timestamp;
 import com.google.cloud.spanner.ErrorCode;
 import com.google.cloud.spanner.SpannerException;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.ChangeStreamMetrics;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.TimestampConverter;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.PartitionMetadataDao.InTransactionContext;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.ChildPartitionsRecord;
@@ -77,6 +79,11 @@ public class ChildPartitionsRecordActionTest {
     final String partitionToken = "partitionToken";
     final long heartbeat = 30L;
     final Timestamp startTimestamp = Timestamp.ofTimeSecondsAndNanos(10L, 20);
+    final Timestamp currentWatermark =
+        Timestamp.ofTimeMicroseconds(
+            TimestampConverter.timestampToMicros(startTimestamp)
+                .subtract(BigDecimal.ONE)
+                .longValue());
     final Timestamp endTimestamp = Timestamp.ofTimeSecondsAndNanos(30L, 40);
     final PartitionMetadata partition = mock(PartitionMetadata.class);
     final ChildPartitionsRecord record =
@@ -109,6 +116,7 @@ public class ChildPartitionsRecordActionTest {
                 .setInclusiveEnd(false)
                 .setHeartbeatMillis(heartbeat)
                 .setState(CREATED)
+                .setCurrentWatermark(currentWatermark)
                 .build());
     verify(dao)
         .insert(
@@ -120,6 +128,7 @@ public class ChildPartitionsRecordActionTest {
                 .setEndTimestamp(endTimestamp)
                 .setInclusiveEnd(false)
                 .setHeartbeatMillis(heartbeat)
+                .setCurrentWatermark(currentWatermark)
                 .setState(CREATED)
                 .build());
   }
@@ -162,6 +171,11 @@ public class ChildPartitionsRecordActionTest {
     final HashSet<String> parentTokens = Sets.newHashSet(partitionToken, anotherPartitionToken);
     final long heartbeat = 30L;
     final Timestamp startTimestamp = Timestamp.ofTimeSecondsAndNanos(10L, 20);
+    final Timestamp currentWatermark =
+        Timestamp.ofTimeMicroseconds(
+            TimestampConverter.timestampToMicros(startTimestamp)
+                .subtract(BigDecimal.ONE)
+                .longValue());
     final Timestamp endTimestamp = Timestamp.ofTimeSecondsAndNanos(30L, 40);
     final PartitionMetadata partition = mock(PartitionMetadata.class);
     final ChildPartitionsRecord record =
@@ -194,6 +208,7 @@ public class ChildPartitionsRecordActionTest {
                 .setInclusiveEnd(false)
                 .setHeartbeatMillis(heartbeat)
                 .setState(CREATED)
+                .setCurrentWatermark(currentWatermark)
                 .build());
   }
 

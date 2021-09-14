@@ -17,19 +17,16 @@
  */
 package org.apache.beam.sdk.io.gcp.spanner.cdc.restriction;
 
-import static org.apache.beam.sdk.io.gcp.spanner.cdc.restriction.PartitionMode.QUERY_CHANGE_STREAM;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.google.cloud.Timestamp;
-import java.util.Arrays;
 import org.apache.beam.sdk.transforms.splittabledofn.RestrictionTracker.IsBounded;
 import org.apache.beam.sdk.transforms.splittabledofn.SplitResult;
 import org.junit.Before;
@@ -40,7 +37,6 @@ public class PartitionRestrictionTrackerTest {
   private PartitionRestriction restriction;
   private PartitionRestrictionSplitter splitter;
   private PartitionRestrictionClaimer claimer;
-  private PartitionRestrictionSplitChecker splitChecker;
   private PartitionRestrictionProgressChecker progressChecker;
   private PartitionRestrictionTracker tracker;
 
@@ -49,34 +45,8 @@ public class PartitionRestrictionTrackerTest {
     restriction = PartitionRestriction.queryChangeStream(Timestamp.MIN_VALUE, Timestamp.MAX_VALUE);
     splitter = mock(PartitionRestrictionSplitter.class);
     claimer = mock(PartitionRestrictionClaimer.class);
-    splitChecker = mock(PartitionRestrictionSplitChecker.class);
     progressChecker = mock(PartitionRestrictionProgressChecker.class);
-    tracker =
-        new PartitionRestrictionTracker(
-            restriction, splitter, claimer, splitChecker, progressChecker);
-  }
-
-  @Test
-  public void testIsSplitAllowedQueryChangeStreamInitialization() {
-    final PartitionRestrictionTracker tracker =
-        new PartitionRestrictionTracker(
-            PartitionRestriction.queryChangeStream(Timestamp.MIN_VALUE, Timestamp.MAX_VALUE));
-
-    assertFalse(tracker.isSplitAllowed());
-  }
-
-  @Test
-  public void testIsSplitAllowedNonQueryChangeStreamInitialization() {
-    Arrays.stream(PartitionMode.values())
-        .filter(mode -> mode != QUERY_CHANGE_STREAM)
-        .map(
-            mode ->
-                new PartitionRestrictionTracker(new PartitionRestriction(null, null, mode, null)))
-        .forEach(
-            tracker ->
-                assertTrue(
-                    "Split must be allowed for " + tracker.getRestriction().getMode(),
-                    tracker.isSplitAllowed()));
+    tracker = new PartitionRestrictionTracker(restriction, splitter, claimer, progressChecker);
   }
 
   @Test
@@ -84,7 +54,7 @@ public class PartitionRestrictionTrackerTest {
     final SplitResult<PartitionRestriction> splitResult = mock(SplitResult.class);
     final PartitionRestriction primary = mock(PartitionRestriction.class);
 
-    when(splitter.trySplit(anyDouble(), anyBoolean(), any(), any())).thenReturn(splitResult);
+    when(splitter.trySplit(anyDouble(), any(), any())).thenReturn(splitResult);
     when(splitResult.getPrimary()).thenReturn(primary);
 
     final SplitResult<PartitionRestriction> trySplitResult = tracker.trySplit(0D);
@@ -102,21 +72,19 @@ public class PartitionRestrictionTrackerTest {
   }
 
   @Test
-  public void testTryClaimWhenCanClaimUpdatesIsSplitAllowedAndLastClaimedPosition() {
+  public void testTryClaimWhenCanClaimUpdates() {
     final PartitionPosition position = mock(PartitionPosition.class);
 
     when(claimer.tryClaim(restriction, null, position)).thenReturn(true);
-    when(splitChecker.isSplitAllowed(restriction, position)).thenReturn(true);
 
     final boolean tryClaimResult = tracker.tryClaim(position);
 
     assertTrue(tryClaimResult);
-    assertTrue(tracker.isSplitAllowed());
     assertEquals(position, tracker.getLastClaimedPosition());
   }
 
   @Test
-  public void testTryClaimWhenCanNotClaimDoesNotUpdateIsSplitAllowedAndLastClaimedPosition() {
+  public void testTryClaimWhenCanNotClaimDoesNotUpdate() {
     final PartitionPosition position = mock(PartitionPosition.class);
 
     when(claimer.tryClaim(restriction, null, position)).thenReturn(false);
@@ -124,7 +92,6 @@ public class PartitionRestrictionTrackerTest {
     final boolean tryClaimResult = tracker.tryClaim(position);
 
     assertFalse(tryClaimResult);
-    assertFalse(tracker.isSplitAllowed());
     assertNull(tracker.getLastClaimedPosition());
   }
 

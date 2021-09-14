@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.gcp.spanner.cdc.mapper;
 
 import java.io.Serializable;
+import org.joda.time.Duration;
 
 // TODO: Add java docs
 public class MapperFactory implements Serializable {
@@ -27,6 +28,12 @@ public class MapperFactory implements Serializable {
   private static ChangeStreamRecordMapper changeStreamRecordMapperInstance;
   private static PartitionMetadataMapper partitionMetadataMapperInstance;
   private static PartitionMetricsMapper partitionMetricsMapperInstance;
+  private static RestrictionMapper restrictionMapperInstance;
+  private final Duration queryInterval;
+
+  public MapperFactory(Duration queryInterval) {
+    this.queryInterval = queryInterval;
+  }
 
   // TODO: See if synchronized is a bottleneck and refactor if so
   public synchronized ChangeStreamRecordMapper changeStreamRecordMapper() {
@@ -48,5 +55,12 @@ public class MapperFactory implements Serializable {
       partitionMetricsMapperInstance = new PartitionMetricsMapper();
     }
     return partitionMetricsMapperInstance;
+  }
+
+  public synchronized RestrictionMapper restrictionMapper() {
+    if (restrictionMapperInstance == null) {
+      restrictionMapperInstance = new RestrictionMapper(queryInterval);
+    }
+    return restrictionMapperInstance;
   }
 }
