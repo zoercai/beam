@@ -68,7 +68,7 @@ public class WaitForChildPartitionsAction {
               AttributeValue.stringAttributeValue(partition.getPartitionToken()));
 
       final String token = partition.getPartitionToken();
-      LOG.debug("[" + token + "] Waiting for child partitions");
+      LOG.info("[" + token + "] Waiting for child partitions");
 
       if (!tracker.tryClaim(PartitionPosition.waitForChildPartitions())) {
         LOG.debug("[" + token + "] Could not claim waitForChildPartitions(), stopping");
@@ -89,7 +89,7 @@ public class WaitForChildPartitionsAction {
         return Optional.of(ProcessContinuation.resume().withResumeDelay(resumeDuration));
       }
 
-      LOG.debug("[" + token + "] Wait for child partitions action completed successfully");
+      LOG.info("[" + token + "] Wait for child partitions action completed successfully");
       return Optional.empty();
     }
   }

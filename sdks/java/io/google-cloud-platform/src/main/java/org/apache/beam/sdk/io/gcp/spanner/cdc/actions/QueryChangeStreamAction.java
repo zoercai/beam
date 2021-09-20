@@ -160,12 +160,19 @@ public class QueryChangeStreamAction {
           }
         } catch (SpannerException e) {
           if (isTimestampOutOfRange(e)) {
+            LOG.info("[" + token + "] query change stream is out of range for "
+                + restrictionStartTimestamp + " to "
+                + restrictionEndTimestamp + ", finishing stream");
             isOutOfRange = true;
           } else {
+            LOG.error("[" + token + "] Error querying change stream", e);
             throw e;
           }
         }
 
+        LOG.info("[" + token + "] Query change stream completed, updating watermark");
+
+        final Instant previousWatermark = watermarkEstimator.currentWatermark();
         final boolean isStreamFinished =
             isOutOfRange || restrictionEndTimestamp.compareTo(partitionEndTimestamp) >= 0;
         final long finalRecordsProcessed = recordsProcessed;
@@ -174,13 +181,23 @@ public class QueryChangeStreamAction {
                 transaction -> {
                   transaction.updateRecordsProcessed(token, finalRecordsProcessed);
                   if (isStreamFinished) {
-                    watermarkEstimator.setWatermark(
-                        new Instant(partitionEndTimestamp.toSqlTimestamp().getTime()));
+                    final Instant currentWatermark = new Instant(
+                        partitionEndTimestamp.toSqlTimestamp().getTime());
+                    LOG.info("[" + token + "] Updating watermark from "
+                        + previousWatermark
+                        + " to "
+                        + currentWatermark);
+                    watermarkEstimator.setWatermark(currentWatermark);
                     transaction.updateCurrentWatermark(token, partitionEndTimestamp);
                     return Optional.empty();
                   } else {
-                    watermarkEstimator.setWatermark(
-                        new Instant(restrictionEndTimestamp.toSqlTimestamp().getTime()));
+                    final Instant currentWatermark = new Instant(
+                        restrictionEndTimestamp.toSqlTimestamp().getTime());
+                    LOG.info("[" + token + "] Updating watermark from "
+                        + previousWatermark
+                        + " to "
+                        + currentWatermark);
+                    watermarkEstimator.setWatermark(currentWatermark);
                     transaction.updateCurrentWatermark(token, restrictionEndTimestamp);
                     transaction.updateToCreated(token);
                     return Optional.of(ProcessContinuation.stop());

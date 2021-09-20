@@ -57,7 +57,7 @@ public class DeletePartitionAction {
               AttributeValue.stringAttributeValue(partition.getPartitionToken()));
 
       final String token = partition.getPartitionToken();
-      LOG.debug("[" + token + "] Deleting partition");
+      LOG.info("[" + token + "] Deleting partition");
 
       if (!tracker.tryClaim(PartitionPosition.deletePartition())) {
         LOG.debug("[" + token + "] Could not claim deletePartition(), stopping");
@@ -65,7 +65,7 @@ public class DeletePartitionAction {
       }
       partitionMetadataDao.delete(token);
 
-      LOG.debug("[" + token + "] Delete partition action completed successfully");
+      LOG.info("[" + token + "] Delete partition action completed successfully");
       return Optional.empty();
     }
   }

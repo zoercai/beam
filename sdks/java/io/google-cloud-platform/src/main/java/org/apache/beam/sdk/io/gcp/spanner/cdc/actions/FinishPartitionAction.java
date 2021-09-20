@@ -66,7 +66,7 @@ public class FinishPartitionAction {
               AttributeValue.stringAttributeValue(partition.getPartitionToken()));
 
       final String token = partition.getPartitionToken();
-      LOG.debug("[" + token + "] Finishing partition");
+      LOG.info("[" + token + "] Finishing partition");
 
       if (!tracker.tryClaim(PartitionPosition.finishPartition())) {
         LOG.debug("[" + token + "] Could not claim finishPartition(), stopping");
@@ -83,7 +83,7 @@ public class FinishPartitionAction {
         }
       }
 
-      LOG.debug("[" + token + "] Finish partition action completed successfully");
+      LOG.info("[" + token + "] Finish partition action completed successfully");
       return Optional.empty();
     }
   }

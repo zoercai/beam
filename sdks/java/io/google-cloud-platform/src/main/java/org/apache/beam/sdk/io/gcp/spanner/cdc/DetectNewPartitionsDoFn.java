@@ -130,8 +130,10 @@ public class DetectNewPartitionsDoFn extends DoFn<ChangeStreamSourceDescriptor, 
             .startScopedSpan()) {
 
       // Updates the current watermark as the min of the watermarks from all existing partitions
+      final Instant previousWatermark = watermarkEstimator.currentWatermark();
       final Instant minCurrentWatermark = getMinWatermark();
       if (minCurrentWatermark != null) {
+        LOG.info("Updating watermark from " + previousWatermark + " to " + minCurrentWatermark);
         watermarkEstimator.setWatermark(minCurrentWatermark);
       }
 
@@ -140,12 +142,20 @@ public class DetectNewPartitionsDoFn extends DoFn<ChangeStreamSourceDescriptor, 
 
         while (resultSet.next()) {
           if (!tracker.tryClaim(currentIndex)) {
+            LOG.info("Could not claim " + currentIndex + ", stopping...");
             return ProcessContinuation.stop();
           }
 
           final PartitionMetadata partition = partitionMetadataMapper.from(resultSet);
           final PartitionMetadata updatedPartition = updateToScheduled(partition);
           receiver.output(updatedPartition);
+          LOG.info(
+              "Scheduled partition "
+                  + updatedPartition.getPartitionToken()
+                  + " for "
+                  + partition.getCurrentWatermark()
+                  + " to "
+                  + partition.getEndTimestamp());
 
           metrics.incPartitionRecordCount();
           currentIndex++;

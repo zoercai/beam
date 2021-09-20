@@ -48,7 +48,7 @@ public class DonePartitionAction {
               AttributeValue.stringAttributeValue(partition.getPartitionToken()));
 
       final String token = partition.getPartitionToken();
-      LOG.debug("[" + token + "] Marking partition as done");
+      LOG.info("[" + token + "] Marking partition as done");
 
       if (!tracker.tryClaim(PartitionPosition.done())) {
         LOG.debug("[" + token + "] Could not claim done(), stopping");
