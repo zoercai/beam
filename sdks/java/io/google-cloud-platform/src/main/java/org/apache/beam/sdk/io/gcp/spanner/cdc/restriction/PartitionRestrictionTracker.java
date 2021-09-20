@@ -65,7 +65,7 @@ public class PartitionRestrictionTracker
             .orElse(null);
     final SplitResult<PartitionRestriction> splitResult =
         splitter.trySplit(fractionOfRemainder, lastClaimedPosition, restriction);
-    LOG.debug(
+    LOG.info(
         "["
             + token
             + "] Try split "
@@ -93,7 +93,13 @@ public class PartitionRestrictionTracker
 
   @Override
   public Progress getProgress() {
-    return progressChecker.getProgress(restriction, lastClaimedPosition);
+    final String token =
+        Optional.ofNullable(restriction.getMetadata())
+            .map(PartitionRestrictionMetadata::getPartitionToken)
+            .orElse(null);
+    final Progress progress = progressChecker.getProgress(restriction, lastClaimedPosition);
+    LOG.info("[" + token + "] Progress is " + progress);
+    return progress;
   }
 
   @Override
