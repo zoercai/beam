@@ -23,6 +23,7 @@ import com.google.auto.value.AutoValue;
 import com.google.cloud.ServiceFactory;
 import com.google.cloud.spanner.Spanner;
 import com.google.cloud.spanner.SpannerOptions;
+import com.google.cloud.spanner.v1.stub.SpannerStubSettings;
 import java.io.Serializable;
 import org.apache.beam.sdk.options.ValueProvider;
 import org.apache.beam.sdk.transforms.display.DisplayData;
@@ -53,9 +54,13 @@ public abstract class SpannerConfig implements Serializable {
 
   public abstract @Nullable ValueProvider<String> getEmulatorHost();
 
+  public abstract @Nullable ValueProvider<Boolean> getIsLocalChannelProvider();
+
   public abstract @Nullable ValueProvider<Duration> getCommitDeadline();
 
   public abstract @Nullable ValueProvider<Duration> getMaxCumulativeBackoff();
+
+  public abstract @Nullable SpannerStubSettings getSpannerStubSettings();
 
   @VisibleForTesting
   abstract @Nullable ServiceFactory<Spanner, SpannerOptions> getServiceFactory();
@@ -111,9 +116,13 @@ public abstract class SpannerConfig implements Serializable {
 
     abstract Builder setEmulatorHost(ValueProvider<String> emulatorHost);
 
+    abstract Builder setIsLocalChannelProvider(ValueProvider<Boolean> isLocalChannelProvider);
+
     abstract Builder setCommitDeadline(ValueProvider<Duration> commitDeadline);
 
     abstract Builder setMaxCumulativeBackoff(ValueProvider<Duration> maxCumulativeBackoff);
+
+    abstract Builder setSpannerStubSettings(SpannerStubSettings spannerStubSettings);
 
     abstract Builder setServiceFactory(ServiceFactory<Spanner, SpannerOptions> serviceFactory);
 
@@ -152,6 +161,10 @@ public abstract class SpannerConfig implements Serializable {
     return toBuilder().setEmulatorHost(emulatorHost).build();
   }
 
+  public SpannerConfig withIsLocalChannelProvider(ValueProvider<Boolean> isLocalChannelProvider) {
+    return toBuilder().setIsLocalChannelProvider(isLocalChannelProvider).build();
+  }
+
   public SpannerConfig withCommitDeadline(Duration commitDeadline) {
     return withCommitDeadline(ValueProvider.StaticValueProvider.of(commitDeadline));
   }
@@ -166,6 +179,10 @@ public abstract class SpannerConfig implements Serializable {
 
   public SpannerConfig withMaxCumulativeBackoff(ValueProvider<Duration> maxCumulativeBackoff) {
     return toBuilder().setMaxCumulativeBackoff(maxCumulativeBackoff).build();
+  }
+
+  public SpannerConfig withSpannerStubSettings(SpannerStubSettings spannerStubSettings) {
+    return toBuilder().setSpannerStubSettings(spannerStubSettings).build();
   }
 
   @VisibleForTesting

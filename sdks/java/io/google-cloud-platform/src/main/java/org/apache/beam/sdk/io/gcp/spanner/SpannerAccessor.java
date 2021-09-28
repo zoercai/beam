@@ -19,6 +19,7 @@ package org.apache.beam.sdk.io.gcp.spanner;
 
 import com.google.api.gax.core.ExecutorProvider;
 import com.google.api.gax.grpc.InstantiatingGrpcChannelProvider;
+import com.google.api.gax.grpc.testing.LocalChannelProvider;
 import com.google.api.gax.retrying.RetrySettings;
 import com.google.api.gax.rpc.HeaderProvider;
 import com.google.api.gax.rpc.ServerStreamingCallSettings;
@@ -139,13 +140,24 @@ public class SpannerAccessor implements AutoCloseable {
       UnaryCallSettings.Builder<CommitRequest, CommitResponse> commitSettings =
           builder.getSpannerStubSettingsBuilder().commitSettings();
       RetrySettings.Builder commitRetrySettings = commitSettings.getRetrySettings().toBuilder();
-      commitSettings.setRetrySettings(
-          commitRetrySettings
-              .setTotalTimeout(org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
-              .setMaxRpcTimeout(org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
-              .setInitialRpcTimeout(
-                  org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
-              .build());
+      if (spannerConfig.getSpannerStubSettings() != null) {
+        UnaryCallSettings<CommitRequest, CommitResponse> configuredCommitSettings =
+            spannerConfig.getSpannerStubSettings().commitSettings();
+        commitSettings.getRetryableCodes().addAll(configuredCommitSettings.getRetryableCodes());
+        RetrySettings.Builder mergedRetrySettings =
+            commitRetrySettings.merge(configuredCommitSettings.getRetrySettings().toBuilder());
+        commitSettings.setRetrySettings(mergedRetrySettings.build());
+      } else {
+        commitSettings.setRetrySettings(
+            commitRetrySettings
+                .setTotalTimeout(
+                    org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
+                .setMaxRpcTimeout(
+                    org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
+                .setInitialRpcTimeout(
+                    org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
+                .build());
+      }
     }
     // Setting the timeout for streaming read to 2 hours. This is 1 hour by default
     // after BEAM 2.20.
@@ -154,12 +166,24 @@ public class SpannerAccessor implements AutoCloseable {
             builder.getSpannerStubSettingsBuilder().executeStreamingSqlSettings();
     RetrySettings.Builder executeSqlStreamingRetrySettings =
         executeStreamingSqlSettings.getRetrySettings().toBuilder();
-    executeStreamingSqlSettings.setRetrySettings(
-        executeSqlStreamingRetrySettings
-            .setInitialRpcTimeout(org.threeten.bp.Duration.ofMinutes(120))
-            .setMaxRpcTimeout(org.threeten.bp.Duration.ofMinutes(120))
-            .setTotalTimeout(org.threeten.bp.Duration.ofMinutes(120))
-            .build());
+    if (spannerConfig.getSpannerStubSettings() != null) {
+      ServerStreamingCallSettings<ExecuteSqlRequest, PartialResultSet>
+          configuredExecuteStreamingSqlSettings =
+              spannerConfig.getSpannerStubSettings().executeStreamingSqlSettings();
+      executeStreamingSqlSettings.setRetryableCodes(
+          configuredExecuteStreamingSqlSettings.getRetryableCodes());
+      RetrySettings.Builder mergedRetrySettings =
+          executeSqlStreamingRetrySettings.merge(
+              configuredExecuteStreamingSqlSettings.getRetrySettings().toBuilder());
+      executeStreamingSqlSettings.setRetrySettings(mergedRetrySettings.build());
+    } else {
+      executeStreamingSqlSettings.setRetrySettings(
+          executeSqlStreamingRetrySettings
+              .setInitialRpcTimeout(org.threeten.bp.Duration.ofMinutes(120))
+              .setMaxRpcTimeout(org.threeten.bp.Duration.ofMinutes(120))
+              .setTotalTimeout(org.threeten.bp.Duration.ofMinutes(120))
+              .build());
+    }
 
     ManagedInstantiatingExecutorProvider executorProvider =
         new ManagedInstantiatingExecutorProvider(
@@ -194,6 +218,10 @@ public class SpannerAccessor implements AutoCloseable {
     ValueProvider<String> emulatorHost = spannerConfig.getEmulatorHost();
     if (emulatorHost != null) {
       builder.setEmulatorHost(emulatorHost.get());
+      if (spannerConfig.getIsLocalChannelProvider() != null
+          && spannerConfig.getIsLocalChannelProvider().get()) {
+        builder.setChannelProvider(LocalChannelProvider.create(emulatorHost.get()));
+      }
       builder.setCredentials(NoCredentials.getInstance());
     } else {
       String userAgentString = USER_AGENT_PREFIX + "/" + ReleaseInfo.getReleaseInfo().getVersion();

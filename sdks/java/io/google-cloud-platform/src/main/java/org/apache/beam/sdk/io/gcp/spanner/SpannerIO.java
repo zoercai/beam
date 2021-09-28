@@ -24,6 +24,8 @@ import static org.apache.beam.sdk.io.gcp.spanner.cdc.NameGenerator.generateParti
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.api.gax.retrying.RetrySettings;
+import com.google.api.gax.rpc.StatusCode.Code;
 import com.google.auto.value.AutoValue;
 import com.google.cloud.ServiceFactory;
 import com.google.cloud.Timestamp;
@@ -37,10 +39,12 @@ import com.google.cloud.spanner.Options.RpcPriority;
 import com.google.cloud.spanner.PartitionOptions;
 import com.google.cloud.spanner.Spanner;
 import com.google.cloud.spanner.SpannerException;
+import com.google.cloud.spanner.SpannerExceptionFactory;
 import com.google.cloud.spanner.SpannerOptions;
 import com.google.cloud.spanner.Statement;
 import com.google.cloud.spanner.Struct;
 import com.google.cloud.spanner.TimestampBound;
+import com.google.cloud.spanner.v1.stub.SpannerStubSettings;
 import io.opencensus.common.Scope;
 import io.opencensus.trace.Sampler;
 import io.opencensus.trace.Tracer;
@@ -66,6 +70,7 @@ import org.apache.beam.sdk.io.gcp.spanner.cdc.PipelineInitializer;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.PostProcessingMetricsDoFn;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.ReadChangeStreamPartitionDoFn;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.actions.ActionFactory;
+import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.ChangeStreamResultSet;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.dao.DaoFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.mapper.MapperFactory;
 import org.apache.beam.sdk.io.gcp.spanner.cdc.model.DataChangeRecord;
@@ -110,6 +115,7 @@ import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.Visi
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.MoreObjects;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Stopwatch;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableSet;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Iterables;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.primitives.UnsignedBytes;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -1492,14 +1498,61 @@ public class SpannerIO {
               .spanBuilder("SpannerIO.ReadChangeStream.expand")
               .setRecordEvents(true)
               .startScopedSpan()) {
-        final SpannerConfig changeStreamSpannerConfig = getSpannerConfig();
+        SpannerConfig changeStreamSpannerConfig = getSpannerConfig();
+        // If retry settings are not specified, set some defaults.
+        if (changeStreamSpannerConfig.getSpannerStubSettings() == null) {
+          ImmutableSet<Code> defaultRetryableCodes =
+              ImmutableSet.of(
+                  Code.DEADLINE_EXCEEDED,
+                  Code.INTERNAL,
+                  Code.UNAVAILABLE,
+                  Code.ABORTED,
+                  Code.UNKNOWN);
+          SpannerStubSettings.Builder defaultSpannerStubSettingsBuilder =
+              SpannerStubSettings.newBuilder();
+          defaultSpannerStubSettingsBuilder
+              .commitSettings()
+              .setRetryableCodes(defaultRetryableCodes)
+              .setRetrySettings(
+                  RetrySettings.newBuilder()
+                      .setInitialRetryDelay(org.threeten.bp.Duration.ofMillis(250))
+                      .setMaxRetryDelay(org.threeten.bp.Duration.ofSeconds(32))
+                      .setRetryDelayMultiplier(1.3)
+                      .setTotalTimeout(org.threeten.bp.Duration.ofHours(24))
+                      .build())
+              .build();
+          defaultSpannerStubSettingsBuilder
+              .executeStreamingSqlSettings()
+              .setRetryableCodes(defaultRetryableCodes)
+              .setRetrySettings(
+                  RetrySettings.newBuilder()
+                      .setInitialRetryDelay(org.threeten.bp.Duration.ofMillis(250))
+                      .setMaxRetryDelay(org.threeten.bp.Duration.ofSeconds(32))
+                      .setRetryDelayMultiplier(1.3)
+                      .setTotalTimeout(org.threeten.bp.Duration.ofHours(24))
+                      .build())
+              .build();
+          try {
+            changeStreamSpannerConfig =
+                changeStreamSpannerConfig.withSpannerStubSettings(
+                    defaultSpannerStubSettingsBuilder.build());
+          } catch (IOException e) {
+            throw SpannerExceptionFactory.newSpannerException(
+                ErrorCode.INTERNAL,
+                "Unexpected error when setting retry, please contact Cloud Spanner support.",
+                e);
+          }
+        }
+
         final SpannerConfig partitionMetadataSpannerConfig =
             SpannerConfig.create()
                 .withProjectId(changeStreamSpannerConfig.getProjectId())
                 .withHost(changeStreamSpannerConfig.getHost())
+                .withIsLocalChannelProvider(changeStreamSpannerConfig.getIsLocalChannelProvider())
                 .withInstanceId(partitionMetadataInstanceId)
                 .withDatabaseId(partitionMetadataDatabaseId)
                 .withCommitDeadline(changeStreamSpannerConfig.getCommitDeadline())
+                .withSpannerStubSettings(changeStreamSpannerConfig.getSpannerStubSettings())
                 .withEmulatorHost(changeStreamSpannerConfig.getEmulatorHost())
                 .withMaxCumulativeBackoff(changeStreamSpannerConfig.getMaxCumulativeBackoff());
         final Duration queryInterval =
@@ -1517,8 +1570,34 @@ public class SpannerIO {
                 mapperFactory,
                 rpcPriority,
                 input.getPipeline().getOptions().getJobName());
-        final ActionFactory actionFactory = new ActionFactory();
 
+        // TODO(zoc) move into dataflow job
+        // Check change stream parameters are valid before processing
+        try {
+          ChangeStreamResultSet resultSet =
+              daoFactory
+                  .getChangeStreamDao()
+                  .changeStreamQuery(
+                      "Parent0", getInclusiveStartAt(), true, getInclusiveEndAt(), false, 5000);
+          resultSet.next();
+        } catch (Exception e) {
+          if (e.getMessage()
+              .contains("Table-valued function not found: READ_" + getChangeStreamName())) {
+            throw new IllegalArgumentException("Change stream specified does not exist.", e);
+          }
+          if (e.getMessage().contains("OUT_OF_RANGE: Specified start_timestamp is too far")) {
+            throw new IllegalArgumentException("Start timestamp is invalid.", e);
+          }
+          if (e.getMessage().contains("RESOURCE_EXHAUSTED")) {
+            throw SpannerExceptionFactory.newSpannerException(
+                ErrorCode.RESOURCE_EXHAUSTED,
+                "See https://cloud.google.com/spanner/quotas for more information.",
+                e);
+          }
+          throw e;
+        }
+
+        final ActionFactory actionFactory = new ActionFactory();
         final DetectNewPartitionsDoFn detectNewPartitionsDoFn =
             new DetectNewPartitionsDoFn(daoFactory, mapperFactory, metrics);
         final ReadChangeStreamPartitionDoFn readChangeStreamPartitionDoFn =
