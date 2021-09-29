@@ -135,36 +135,33 @@ public class SpannerAccessor implements AutoCloseable {
     SpannerOptions.Builder builder = SpannerOptions.newBuilder();
 
     ValueProvider<Duration> commitDeadline = spannerConfig.getCommitDeadline();
-    SpannerStubSettings.Builder spannerStubSettingsBuilder = builder
-        .getSpannerStubSettingsBuilder();
+    SpannerStubSettings.Builder spannerStubSettingsBuilder =
+        builder.getSpannerStubSettingsBuilder();
     UnaryCallSettings.Builder<CommitRequest, CommitResponse> commitSettings =
         spannerStubSettingsBuilder.commitSettings();
     RetrySettings.Builder commitRetrySettings = commitSettings.getRetrySettings().toBuilder();
     if (commitDeadline != null && commitDeadline.get().getMillis() > 0) {
       // Set the GRPC deadline on the Commit API call.
-        commitSettings.setRetrySettings(
-            commitRetrySettings
-                .setTotalTimeout(
-                    org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
-                .setMaxRpcTimeout(
-                    org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
-                .setInitialRpcTimeout(
-                    org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
-                .build());
+      commitSettings.setRetrySettings(
+          commitRetrySettings
+              .setTotalTimeout(org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
+              .setMaxRpcTimeout(org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
+              .setInitialRpcTimeout(
+                  org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
+              .build());
     }
     // Setting the timeout for streaming read to 2 hours. This is 1 hour by default
     // after BEAM 2.20.
     ServerStreamingCallSettings.Builder<ExecuteSqlRequest, PartialResultSet>
-        executeStreamingSqlSettings =
-            spannerStubSettingsBuilder.executeStreamingSqlSettings();
+        executeStreamingSqlSettings = spannerStubSettingsBuilder.executeStreamingSqlSettings();
     RetrySettings.Builder executeSqlStreamingRetrySettings =
         executeStreamingSqlSettings.getRetrySettings().toBuilder();
-      executeStreamingSqlSettings.setRetrySettings(
-          executeSqlStreamingRetrySettings
-              .setInitialRpcTimeout(org.threeten.bp.Duration.ofMinutes(120))
-              .setMaxRpcTimeout(org.threeten.bp.Duration.ofMinutes(120))
-              .setTotalTimeout(org.threeten.bp.Duration.ofMinutes(120))
-              .build());
+    executeStreamingSqlSettings.setRetrySettings(
+        executeSqlStreamingRetrySettings
+            .setInitialRpcTimeout(org.threeten.bp.Duration.ofMinutes(120))
+            .setMaxRpcTimeout(org.threeten.bp.Duration.ofMinutes(120))
+            .setTotalTimeout(org.threeten.bp.Duration.ofMinutes(120))
+            .build());
 
     SpannerStubSettings spannerStubSettings = spannerConfig.getSpannerStubSettings();
     if (spannerStubSettings != null) {
@@ -176,15 +173,14 @@ public class SpannerAccessor implements AutoCloseable {
       commitSettings.setRetrySettings(mergedCommitRetrySettingsBuilder.build());
 
       ServerStreamingCallSettings<ExecuteSqlRequest, PartialResultSet>
-          configuredExecuteStreamingSqlSettings =
-          spannerStubSettings.executeStreamingSqlSettings();
+          configuredExecuteStreamingSqlSettings = spannerStubSettings.executeStreamingSqlSettings();
       executeStreamingSqlSettings.setRetryableCodes(
           configuredExecuteStreamingSqlSettings.getRetryableCodes());
       RetrySettings.Builder mergedExecuteSqlStreamingSettingsBuilder =
           executeSqlStreamingRetrySettings.merge(
               configuredExecuteStreamingSqlSettings.getRetrySettings().toBuilder());
-      executeStreamingSqlSettings
-          .setRetrySettings(mergedExecuteSqlStreamingSettingsBuilder.build());
+      executeStreamingSqlSettings.setRetrySettings(
+          mergedExecuteSqlStreamingSettingsBuilder.build());
     }
 
     ManagedInstantiatingExecutorProvider executorProvider =

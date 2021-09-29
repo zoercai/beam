@@ -1519,8 +1519,7 @@ public class SpannerIO {
                       .setMaxRetryDelay(org.threeten.bp.Duration.ofSeconds(32))
                       .setRetryDelayMultiplier(1.3)
                       .setTotalTimeout(org.threeten.bp.Duration.ofHours(24))
-                      .build())
-              .build();
+                      .build());
           defaultSpannerStubSettingsBuilder
               .executeStreamingSqlSettings()
               .setRetryableCodes(defaultRetryableCodes)
@@ -1530,17 +1529,14 @@ public class SpannerIO {
                       .setMaxRetryDelay(org.threeten.bp.Duration.ofSeconds(32))
                       .setRetryDelayMultiplier(1.3)
                       .setTotalTimeout(org.threeten.bp.Duration.ofHours(24))
-                      .build())
-              .build();
+                      .build());
           try {
             changeStreamSpannerConfig =
                 changeStreamSpannerConfig.withSpannerStubSettings(
                     defaultSpannerStubSettingsBuilder.build());
           } catch (IOException e) {
             throw SpannerExceptionFactory.newSpannerException(
-                ErrorCode.INTERNAL,
-                "Unexpected error when setting retry.",
-                e);
+                ErrorCode.INTERNAL, "Unexpected error when setting retry.", e);
           }
         }
 
