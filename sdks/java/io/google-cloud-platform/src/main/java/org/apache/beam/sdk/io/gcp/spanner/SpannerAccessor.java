@@ -33,6 +33,7 @@ import com.google.cloud.spanner.DatabaseId;
 import com.google.cloud.spanner.Spanner;
 import com.google.cloud.spanner.SpannerOptions;
 import com.google.cloud.spanner.spi.v1.SpannerInterceptorProvider;
+import com.google.cloud.spanner.v1.stub.SpannerStubSettings;
 import com.google.spanner.v1.CommitRequest;
 import com.google.spanner.v1.CommitResponse;
 import com.google.spanner.v1.ExecuteSqlRequest;
@@ -134,20 +135,13 @@ public class SpannerAccessor implements AutoCloseable {
     SpannerOptions.Builder builder = SpannerOptions.newBuilder();
 
     ValueProvider<Duration> commitDeadline = spannerConfig.getCommitDeadline();
+    SpannerStubSettings.Builder spannerStubSettingsBuilder = builder
+        .getSpannerStubSettingsBuilder();
+    UnaryCallSettings.Builder<CommitRequest, CommitResponse> commitSettings =
+        spannerStubSettingsBuilder.commitSettings();
+    RetrySettings.Builder commitRetrySettings = commitSettings.getRetrySettings().toBuilder();
     if (commitDeadline != null && commitDeadline.get().getMillis() > 0) {
-
       // Set the GRPC deadline on the Commit API call.
-      UnaryCallSettings.Builder<CommitRequest, CommitResponse> commitSettings =
-          builder.getSpannerStubSettingsBuilder().commitSettings();
-      RetrySettings.Builder commitRetrySettings = commitSettings.getRetrySettings().toBuilder();
-      if (spannerConfig.getSpannerStubSettings() != null) {
-        UnaryCallSettings<CommitRequest, CommitResponse> configuredCommitSettings =
-            spannerConfig.getSpannerStubSettings().commitSettings();
-        commitSettings.getRetryableCodes().addAll(configuredCommitSettings.getRetryableCodes());
-        RetrySettings.Builder mergedRetrySettings =
-            commitRetrySettings.merge(configuredCommitSettings.getRetrySettings().toBuilder());
-        commitSettings.setRetrySettings(mergedRetrySettings.build());
-      } else {
         commitSettings.setRetrySettings(
             commitRetrySettings
                 .setTotalTimeout(
@@ -157,32 +151,40 @@ public class SpannerAccessor implements AutoCloseable {
                 .setInitialRpcTimeout(
                     org.threeten.bp.Duration.ofMillis(commitDeadline.get().getMillis()))
                 .build());
-      }
     }
     // Setting the timeout for streaming read to 2 hours. This is 1 hour by default
     // after BEAM 2.20.
     ServerStreamingCallSettings.Builder<ExecuteSqlRequest, PartialResultSet>
         executeStreamingSqlSettings =
-            builder.getSpannerStubSettingsBuilder().executeStreamingSqlSettings();
+            spannerStubSettingsBuilder.executeStreamingSqlSettings();
     RetrySettings.Builder executeSqlStreamingRetrySettings =
         executeStreamingSqlSettings.getRetrySettings().toBuilder();
-    if (spannerConfig.getSpannerStubSettings() != null) {
-      ServerStreamingCallSettings<ExecuteSqlRequest, PartialResultSet>
-          configuredExecuteStreamingSqlSettings =
-              spannerConfig.getSpannerStubSettings().executeStreamingSqlSettings();
-      executeStreamingSqlSettings.setRetryableCodes(
-          configuredExecuteStreamingSqlSettings.getRetryableCodes());
-      RetrySettings.Builder mergedRetrySettings =
-          executeSqlStreamingRetrySettings.merge(
-              configuredExecuteStreamingSqlSettings.getRetrySettings().toBuilder());
-      executeStreamingSqlSettings.setRetrySettings(mergedRetrySettings.build());
-    } else {
       executeStreamingSqlSettings.setRetrySettings(
           executeSqlStreamingRetrySettings
               .setInitialRpcTimeout(org.threeten.bp.Duration.ofMinutes(120))
               .setMaxRpcTimeout(org.threeten.bp.Duration.ofMinutes(120))
               .setTotalTimeout(org.threeten.bp.Duration.ofMinutes(120))
               .build());
+
+    SpannerStubSettings spannerStubSettings = spannerConfig.getSpannerStubSettings();
+    if (spannerStubSettings != null) {
+      UnaryCallSettings<CommitRequest, CommitResponse> configuredCommitSettings =
+          spannerStubSettings.commitSettings();
+      commitSettings.getRetryableCodes().addAll(configuredCommitSettings.getRetryableCodes());
+      RetrySettings.Builder mergedCommitRetrySettingsBuilder =
+          commitRetrySettings.merge(configuredCommitSettings.getRetrySettings().toBuilder());
+      commitSettings.setRetrySettings(mergedCommitRetrySettingsBuilder.build());
+
+      ServerStreamingCallSettings<ExecuteSqlRequest, PartialResultSet>
+          configuredExecuteStreamingSqlSettings =
+          spannerStubSettings.executeStreamingSqlSettings();
+      executeStreamingSqlSettings.setRetryableCodes(
+          configuredExecuteStreamingSqlSettings.getRetryableCodes());
+      RetrySettings.Builder mergedExecuteSqlStreamingSettingsBuilder =
+          executeSqlStreamingRetrySettings.merge(
+              configuredExecuteStreamingSqlSettings.getRetrySettings().toBuilder());
+      executeStreamingSqlSettings
+          .setRetrySettings(mergedExecuteSqlStreamingSettingsBuilder.build());
     }
 
     ManagedInstantiatingExecutorProvider executorProvider =

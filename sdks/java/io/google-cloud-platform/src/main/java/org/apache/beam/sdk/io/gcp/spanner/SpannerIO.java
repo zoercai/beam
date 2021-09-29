@@ -1539,7 +1539,7 @@ public class SpannerIO {
           } catch (IOException e) {
             throw SpannerExceptionFactory.newSpannerException(
                 ErrorCode.INTERNAL,
-                "Unexpected error when setting retry, please contact Cloud Spanner support.",
+                "Unexpected error when setting retry.",
                 e);
           }
         }
@@ -1573,28 +1573,12 @@ public class SpannerIO {
 
         // TODO(zoc) move into dataflow job
         // Check change stream parameters are valid before processing
-        try {
-          ChangeStreamResultSet resultSet =
-              daoFactory
-                  .getChangeStreamDao()
-                  .changeStreamQuery(
-                      "Parent0", getInclusiveStartAt(), true, getInclusiveEndAt(), false, 5000);
+        try (ChangeStreamResultSet resultSet =
+            daoFactory
+                .getChangeStreamDao()
+                .changeStreamQuery(
+                    "Parent0", getInclusiveStartAt(), true, getInclusiveEndAt(), false, 5000)) {
           resultSet.next();
-        } catch (Exception e) {
-          if (e.getMessage()
-              .contains("Table-valued function not found: READ_" + getChangeStreamName())) {
-            throw new IllegalArgumentException("Change stream specified does not exist.", e);
-          }
-          if (e.getMessage().contains("OUT_OF_RANGE: Specified start_timestamp is too far")) {
-            throw new IllegalArgumentException("Start timestamp is invalid.", e);
-          }
-          if (e.getMessage().contains("RESOURCE_EXHAUSTED")) {
-            throw SpannerExceptionFactory.newSpannerException(
-                ErrorCode.RESOURCE_EXHAUSTED,
-                "See https://cloud.google.com/spanner/quotas for more information.",
-                e);
-          }
-          throw e;
         }
 
         final ActionFactory actionFactory = new ActionFactory();

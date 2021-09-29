@@ -65,6 +65,62 @@ public class SpannerChangeStreamErrorsTest {
   private MockServiceHelper serviceHelper;
   private SpannerConfig spannerConfig;
 
+  @Before
+  public void setup()
+      throws InterruptedException, ExecutionException, TimeoutException, IOException {
+    mockSpannerService = new MockSpannerServiceImpl();
+    mockOperationsService = new MockOperationsServiceImpl();
+    mockDatabaseAdminService = new MockDatabaseAdminServiceImpl(mockOperationsService);
+
+    serviceHelper =
+        new MockServiceHelper(
+            SPANNER_HOST,
+            Arrays.asList(mockSpannerService, mockOperationsService, mockDatabaseAdminService));
+    serviceHelper.start();
+    serviceHelper.reset();
+
+    ImmutableSet<Code> defaultRetryableCodes =
+        ImmutableSet.of(
+            Code.DEADLINE_EXCEEDED, Code.INTERNAL, Code.UNAVAILABLE, Code.ABORTED, Code.UNKNOWN);
+    SpannerStubSettings.Builder defaultSpannerStubSettingsBuilder =
+        SpannerStubSettings.newBuilder();
+    defaultSpannerStubSettingsBuilder
+        .commitSettings()
+        .setRetryableCodes(defaultRetryableCodes)
+        .setRetrySettings(
+            RetrySettings.newBuilder()
+                .setInitialRetryDelay(org.threeten.bp.Duration.ofMillis(250))
+                .setMaxRetryDelay(org.threeten.bp.Duration.ofSeconds(1))
+                .setRetryDelayMultiplier(1.3)
+                .setTotalTimeout(org.threeten.bp.Duration.ofSeconds(1))
+                .build())
+        .build();
+    defaultSpannerStubSettingsBuilder
+        .executeStreamingSqlSettings()
+        .setRetryableCodes(defaultRetryableCodes)
+        .setRetrySettings(
+            RetrySettings.newBuilder()
+                .setInitialRetryDelay(org.threeten.bp.Duration.ofMillis(250))
+                .setMaxRetryDelay(org.threeten.bp.Duration.ofSeconds(1))
+                .setRetryDelayMultiplier(1.3)
+                .setTotalTimeout(org.threeten.bp.Duration.ofSeconds(1))
+                .build())
+        .build();
+    spannerConfig =
+        SpannerConfig.create()
+            .withEmulatorHost(StaticValueProvider.of(SPANNER_HOST))
+            .withIsLocalChannelProvider(StaticValueProvider.of(true))
+            .withSpannerStubSettings(defaultSpannerStubSettingsBuilder.build())
+            .withProjectId(TEST_PROJECT)
+            .withInstanceId(TEST_INSTANCE)
+            .withDatabaseId(TEST_DATABASE);
+  }
+
+  @After
+  public void tearDown() {
+    serviceHelper.stop();
+  }
+
   // ---------------- Client Library Errors ----------------
 
   @Test
@@ -87,7 +143,6 @@ public class SpannerChangeStreamErrorsTest {
     } finally {
       thrown.expect(SpannerException.class);
       thrown.expectMessage("RESOURCE_EXHAUSTED");
-      thrown.expectMessage("See https://cloud.google.com/spanner/quotas for more information.");
     }
   }
 
@@ -217,61 +272,5 @@ public class SpannerChangeStreamErrorsTest {
       thrown.expect(SpannerException.class);
       thrown.expectMessage("UNKNOWN");
     }
-  }
-
-  @Before
-  public void setup()
-      throws InterruptedException, ExecutionException, TimeoutException, IOException {
-    mockSpannerService = new MockSpannerServiceImpl();
-    mockOperationsService = new MockOperationsServiceImpl();
-    mockDatabaseAdminService = new MockDatabaseAdminServiceImpl(mockOperationsService);
-
-    serviceHelper =
-        new MockServiceHelper(
-            SPANNER_HOST,
-            Arrays.asList(mockSpannerService, mockOperationsService, mockDatabaseAdminService));
-    serviceHelper.start();
-    serviceHelper.reset();
-
-    ImmutableSet<Code> defaultRetryableCodes =
-        ImmutableSet.of(
-            Code.DEADLINE_EXCEEDED, Code.INTERNAL, Code.UNAVAILABLE, Code.ABORTED, Code.UNKNOWN);
-    SpannerStubSettings.Builder defaultSpannerStubSettingsBuilder =
-        SpannerStubSettings.newBuilder();
-    defaultSpannerStubSettingsBuilder
-        .commitSettings()
-        .setRetryableCodes(defaultRetryableCodes)
-        .setRetrySettings(
-            RetrySettings.newBuilder()
-                .setInitialRetryDelay(org.threeten.bp.Duration.ofMillis(250))
-                .setMaxRetryDelay(org.threeten.bp.Duration.ofSeconds(1))
-                .setRetryDelayMultiplier(1.3)
-                .setTotalTimeout(org.threeten.bp.Duration.ofSeconds(1))
-                .build())
-        .build();
-    defaultSpannerStubSettingsBuilder
-        .executeStreamingSqlSettings()
-        .setRetryableCodes(defaultRetryableCodes)
-        .setRetrySettings(
-            RetrySettings.newBuilder()
-                .setInitialRetryDelay(org.threeten.bp.Duration.ofMillis(250))
-                .setMaxRetryDelay(org.threeten.bp.Duration.ofSeconds(1))
-                .setRetryDelayMultiplier(1.3)
-                .setTotalTimeout(org.threeten.bp.Duration.ofSeconds(1))
-                .build())
-        .build();
-    spannerConfig =
-        SpannerConfig.create()
-            .withEmulatorHost(StaticValueProvider.of(SPANNER_HOST))
-            .withIsLocalChannelProvider(StaticValueProvider.of(true))
-            .withSpannerStubSettings(defaultSpannerStubSettingsBuilder.build())
-            .withProjectId(TEST_PROJECT)
-            .withInstanceId(TEST_INSTANCE)
-            .withDatabaseId(TEST_DATABASE);
-  }
-
-  @After
-  public void tearDown() {
-    serviceHelper.stop();
   }
 }
