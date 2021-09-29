@@ -24,8 +24,6 @@ import static org.apache.beam.sdk.io.gcp.spanner.cdc.NameGenerator.generateParti
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.api.gax.retrying.RetrySettings;
-import com.google.api.gax.rpc.StatusCode.Code;
 import com.google.auto.value.AutoValue;
 import com.google.cloud.ServiceFactory;
 import com.google.cloud.Timestamp;
@@ -39,12 +37,10 @@ import com.google.cloud.spanner.Options.RpcPriority;
 import com.google.cloud.spanner.PartitionOptions;
 import com.google.cloud.spanner.Spanner;
 import com.google.cloud.spanner.SpannerException;
-import com.google.cloud.spanner.SpannerExceptionFactory;
 import com.google.cloud.spanner.SpannerOptions;
 import com.google.cloud.spanner.Statement;
 import com.google.cloud.spanner.Struct;
 import com.google.cloud.spanner.TimestampBound;
-import com.google.cloud.spanner.v1.stub.SpannerStubSettings;
 import io.opencensus.common.Scope;
 import io.opencensus.trace.Sampler;
 import io.opencensus.trace.Tracer;
@@ -115,7 +111,6 @@ import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.Visi
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.MoreObjects;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Stopwatch;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableSet;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Iterables;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.primitives.UnsignedBytes;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -1499,47 +1494,6 @@ public class SpannerIO {
               .setRecordEvents(true)
               .startScopedSpan()) {
         SpannerConfig changeStreamSpannerConfig = getSpannerConfig();
-        // If retry settings are not specified, set some defaults.
-        if (changeStreamSpannerConfig.getSpannerStubSettings() == null) {
-          ImmutableSet<Code> defaultRetryableCodes =
-              ImmutableSet.of(
-                  Code.DEADLINE_EXCEEDED,
-                  Code.INTERNAL,
-                  Code.UNAVAILABLE,
-                  Code.ABORTED,
-                  Code.UNKNOWN);
-          SpannerStubSettings.Builder defaultSpannerStubSettingsBuilder =
-              SpannerStubSettings.newBuilder();
-          defaultSpannerStubSettingsBuilder
-              .commitSettings()
-              .setRetryableCodes(defaultRetryableCodes)
-              .setRetrySettings(
-                  RetrySettings.newBuilder()
-                      .setInitialRetryDelay(org.threeten.bp.Duration.ofMillis(250))
-                      .setMaxRetryDelay(org.threeten.bp.Duration.ofSeconds(32))
-                      .setRetryDelayMultiplier(1.3)
-                      .setTotalTimeout(org.threeten.bp.Duration.ofHours(24))
-                      .build());
-          defaultSpannerStubSettingsBuilder
-              .executeStreamingSqlSettings()
-              .setRetryableCodes(defaultRetryableCodes)
-              .setRetrySettings(
-                  RetrySettings.newBuilder()
-                      .setInitialRetryDelay(org.threeten.bp.Duration.ofMillis(250))
-                      .setMaxRetryDelay(org.threeten.bp.Duration.ofSeconds(32))
-                      .setRetryDelayMultiplier(1.3)
-                      .setTotalTimeout(org.threeten.bp.Duration.ofHours(24))
-                      .build());
-          try {
-            changeStreamSpannerConfig =
-                changeStreamSpannerConfig.withSpannerStubSettings(
-                    defaultSpannerStubSettingsBuilder.build());
-          } catch (IOException e) {
-            throw SpannerExceptionFactory.newSpannerException(
-                ErrorCode.INTERNAL, "Unexpected error when setting retry.", e);
-          }
-        }
-
         final SpannerConfig partitionMetadataSpannerConfig =
             SpannerConfig.create()
                 .withProjectId(changeStreamSpannerConfig.getProjectId())
