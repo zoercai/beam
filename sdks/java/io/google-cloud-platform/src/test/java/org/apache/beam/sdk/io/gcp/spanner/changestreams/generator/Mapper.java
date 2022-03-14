@@ -1,5 +1,6 @@
 package org.apache.beam.sdk.io.gcp.spanner.changestreams.generator;
 
+import com.google.cloud.Timestamp;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -7,22 +8,29 @@ import java.util.stream.Collectors;
 
 public class Mapper {
   private static final Table TABLE = Table.of("Table");
+
   private static final List<ColumnType> ROW_TYPE =
       Arrays.asList(
           new ColumnType("Id", new TypeCode("INT64"), true),
           new ColumnType("SongName", new TypeCode("STRING(MAX)"), false));
+
+  public static String mapPartitionToken(long tokenId) {
+    return "Partition-" + tokenId;
+  }
+
   public static PartitionRecord mapPartitionRecord(
-      PartitionId partitionId,
+      String partitionToken,
       long recordSequence,
-      Set<PartitionId> oldPartitions,
-      Set<PartitionId> newPartitions) {
+      Set<String> oldPartitions,
+      Set<String> newPartitions) {
     return new PartitionRecord(
-        partitionId,
+        partitionToken,
         recordSequence,
-        Timestamp.of(System.currentTimeMillis()),
+        Timestamp.now(),
         oldPartitions,
         newPartitions);
   }
+
   public static DataChangesRecord mapChangeRecord(
       RecordAction recordAction,
       Partition partition,
@@ -43,6 +51,7 @@ public class Mapper {
         mapModType(recordAction),
         mapValueCaptureType(recordAction));
   }
+
   private static Mod mapMod(RecordAction recordAction, Integer key) {
     switch (recordAction) {
       case RECORD_NEW:
@@ -63,6 +72,7 @@ public class Mapper {
     }
     return null;
   }
+
   public static ModType mapModType(RecordAction recordAction) {
     switch (recordAction) {
       case RECORD_NEW:
@@ -74,6 +84,7 @@ public class Mapper {
     }
     return null;
   }
+
   public static ValueCaptureType mapValueCaptureType(RecordAction recordAction) {
     if (recordAction == RecordAction.RECORD_NEW) {
       return ValueCaptureType.NEW_VALUES;

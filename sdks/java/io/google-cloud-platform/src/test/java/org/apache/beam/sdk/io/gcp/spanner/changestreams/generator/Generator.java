@@ -92,7 +92,7 @@ public class Generator {
 
   private void generatePartitions() {
     for (int i = 0; i < this.numStartingPartitions; i++) {
-      this.partitions.add(new Partition("Partition-" + this.nextPartitionId++));
+      this.partitions.add(new Partition(Mapper.mapPartitionToken(this.nextPartitionId++)));
     }
   }
 
@@ -219,7 +219,7 @@ public class Generator {
       return;
     }
     Set<Integer> primaryKeys = partition.partitionRecords();
-    Partition newPartition = new Partition(PartitionId.of(nextPartitionId++), primaryKeys);
+    Partition newPartition = new Partition(Mapper.mapPartitionToken(nextPartitionId++), primaryKeys);
     partitions.add(newPartition);
     this.builder =
         this.builder.addElements(
@@ -242,7 +242,7 @@ public class Generator {
     // Create a new partition to merge into
     Set<Integer> mergedPrimaryKeys = new HashSet<>(partition.getPrimaryKeys());
     mergedPrimaryKeys.addAll(partition2.getPrimaryKeys());
-    Partition newPartition = new Partition(PartitionId.of(nextPartitionId++), mergedPrimaryKeys);
+    Partition newPartition = new Partition(Mapper.mapPartitionToken(nextPartitionId++), mergedPrimaryKeys);
     partitions.add(newPartition);
     newPartition.addRecords(partition2.getPrimaryKeys());
     // Delete the merged partition
@@ -271,7 +271,7 @@ public class Generator {
   }
 
   private void movePartition(Partition partition) {
-    Partition newPartition = new Partition(PartitionId.of(nextPartitionId++),
+    Partition newPartition = new Partition(Mapper.mapPartitionToken(nextPartitionId++),
         partition.getPrimaryKeys());
     partitions.add(newPartition);
     partitions.remove(partition);
